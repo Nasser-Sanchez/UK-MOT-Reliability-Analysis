@@ -1,0 +1,36 @@
+[project]
+name = "uk-car-analyser"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Nasser-Sanchez", email = "jameel02@live.co.uk" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "ipykernel>=7.3.0",
+    "jupyter>=1.1.1",
+    "lifelines>=0.30.3",
+    "lightgbm>=4.7.0",
+    "matplotlib>=3.11.1",
+    "numpy>=2.4.6",
+    "pandas>=2.3.3",
+    "playwright>=1.62.0",
+    "plotly>=7.0.0",
+    "polars>=1.44.0",
+    "pyarrow>=25.0.1",
+    "requests>=2.34.2",
+    "scikit-learn>=1.9.0",
+    "scikit-survival>=0.28.0",
+    "scipy>=1.17.1",
+    "seaborn>=0.13.2",
+    "xgboost>=3.2.0",
+]
+
+[project.scripts]
+uk-car-analyser = "uk_car_analyser:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
