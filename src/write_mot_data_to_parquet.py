@@ -9,7 +9,7 @@ base_dir = Path("data/mot_results")
 if not base_dir.exists():
     print(f"Directory {base_dir} does not exist.")
 else:
-    # Iterate through each year folder (e.g., 2017, 2018, etc.)
+    # Iterate through each year folder 
     for year_folder in base_dir.iterdir():
         if year_folder.is_dir():
             print(f"\nProcessing year: {year_folder.name}")
