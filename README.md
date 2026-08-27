@@ -6,6 +6,13 @@ A data pipeline and exploratory analysis project for UK MOT (Ministry of Transpo
 
 This project downloads, parses, and combines anonymised MOT test results from [DfT Open Data](https://data.dft.gov.uk/anonymised-mot-test/test_data/) and [DVSA Early Data Hub](https://edh-dvsa-data-gov-uk-files-prod.s3.eu-west-1.amazonaws.com/) (2005–2025) into queryable parquet files. The goal is to build a reusable dataset for vehicle reliability analysis, survival modelling, and predictive modelling of MOT pass/fail outcomes.
 
+## Planned work
+
+- [ ] Survival analysis — time-to-MOT-failure by vehicle cohort
+- [ ] **Used car listings extension** — scrape UK used car data to predict remaining vehicle life (miles/years to failure) based on make, model, year, and current mileage
+- [ ] **Cost-benefit analysis** — compare used car price to new/historical MSRP, and evaluate cost per remaining miles/years vs buying new
+- [ ] Interactive visualisation dashboard (Plotly)
+
 ## What's here
 
 | Component | Description |
@@ -39,13 +46,6 @@ uv run src/combine_mot_data.py
 ```
 
 **Prerequisites**: 7-Zip must be installed and on PATH (used by `fetch_mot_data.py` for zip extraction).
-
-## Planned work
-
-- [ ] Survival analysis — time-to-MOT-failure by vehicle cohort
-- [ ] **Used car listings extension** — scrape UK used car data to predict remaining vehicle life (miles/years to failure) based on make, model, year, and current mileage
-- [ ] **Cost-benefit analysis** — compare used car price to new/historical MSRP, and evaluate cost per remaining miles/years vs buying new
-- [ ] Interactive visualisation dashboard (Plotly)
 
 ## Tech stack
 
