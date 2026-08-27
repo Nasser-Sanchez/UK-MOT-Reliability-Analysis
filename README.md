@@ -43,6 +43,8 @@ uv run src/combine_mot_data.py
 ## Planned work
 
 - [ ] Survival analysis — time-to-MOT-failure by vehicle cohort
+- [ ] **Used car listings extension** — scrape UK used car data to predict remaining vehicle life (miles/years to failure) based on make, model, year, and current mileage
+- [ ] **Cost-benefit analysis** — compare used car price to new/historical MSRP, and evaluate cost per remaining miles/years vs buying new
 - [ ] Interactive visualisation dashboard (Plotly)
 
 ## Tech stack
