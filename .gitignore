@@ -12,3 +12,6 @@ wheels/
 # Docs and data
 docs/
 data/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
