@@ -65,15 +65,8 @@ def extract_gz(filepath, dest_dir):
 
 
 def extract_zip(filepath, dest_dir):
-    """
-    Extract any archive type using 7-Zip.
-    Handles: zip, tar, bz2, gz, deflate64, split archives.
-    """
+ # use 7 zip
     try:
-        # 7z x -o<dest> -y
-        # x = extract with full paths
-        # -o = output directory
-        # -y = overwrite without prompt
         result = subprocess.run(
             ["7z", "x", filepath, f"-o{dest_dir}", "-y"],
             check=True,
