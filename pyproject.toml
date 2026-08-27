@@ -10,6 +10,8 @@ requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.15.0",
     "cryptography>=50.0.1",
+    "duckdb>=1.5.5",
+    "duckdb-engine>=0.17.0",
     "ipykernel>=7.3.0",
     "jupyter>=1.1.1",
     "lifelines>=0.30.3",
