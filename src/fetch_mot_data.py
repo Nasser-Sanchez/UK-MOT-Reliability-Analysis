@@ -79,9 +79,9 @@ def extract_zip(filepath, dest_dir):
         print(f"     ✓ Extracted {file_count} files")
         
     except FileNotFoundError:
-        print(f"     ✗ 7-Zip not found in PATH. Install 7-Zip or add it to PATH.")
+        print(f"ERROR: 7-Zip not found in PATH. Install 7-Zip or add it to PATH.")
     except subprocess.CalledProcessError as e:
-        print(f"     ✗ Extraction failed: {e.stderr}")
+        print(f"ERROR: Extraction failed: {e.stderr}")
 
 def download_and_extract_year(year, filename, base_url, dest_dir, file_type="dft"):
     """Download and extract a single year's data."""
