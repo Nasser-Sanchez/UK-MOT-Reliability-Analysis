@@ -90,18 +90,18 @@ def main():
     print("=" * 60)
 
     # 1. Authenticate
-    print("\n[1/4] Getting OAuth token …")
+    print("\n[1/3] Getting OAuth token …")
     token = get_access_token()
 
     # 2. Request bulk + delta URLs
-    print("\n[2/4] Requesting file URLs…")
+    print("\n[2/3] Requesting file URLs…")
     files = request_bulk_files(token)
     bulk_files = files.get("bulk", [])
     delta_files = files.get("delta", [])
     print(f"  Found {len(bulk_files)} bulk file(s), {len(delta_files)} delta file(s)")
 
     # 3. Download bulk files
-    print("\n[3/4] Downloading bulk files…")
+    print("\n[3/3] Downloading bulk files…")
     BULK_DIR.mkdir(parents=True, exist_ok=True)
     for item in bulk_files:
         url = item["downloadUrl"]
@@ -109,14 +109,7 @@ def main():
         dest = BULK_DIR / name
         download_file(url, dest)
 
-    # 4. Download delta files
-    print("\n[4/4] Downloading delta files …")
-    DELTA_DIR.mkdir(parents=True, exist_ok=True)
-    for item in delta_files:
-        url = item["downloadUrl"]
-        name = item["filename"].split("/")[-1]
-        dest = DELTA_DIR / name
-        download_file(url, dest)
+
 
     print("\n" + "=" * 60)
     print("Done.")
