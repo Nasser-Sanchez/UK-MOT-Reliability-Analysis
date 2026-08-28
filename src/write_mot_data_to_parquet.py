@@ -58,6 +58,7 @@ for year_folder in year_folders:
     sql = f"""
         COPY (
             SELECT
+                test_id,
                 vehicle_id,
                 first_use_date,
                 test_date,
