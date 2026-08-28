@@ -13,7 +13,7 @@ con.execute("""
            make, model, 
            fuel_type, cylinder_capacity, test_mileage,
            first_use_date AS start_date, test_date AS end_date,
-           ROW_NUMBER()OVER(PARTITION BY vehicle_id ORDER BY test_date DESC) AS rownum
+           ROW_NUMBER()OVER(PARTITION BY vehicle_id ORDER BY test_date DESC, test_id DESC) AS rownum
            
            FROM read_parquet('data/mot_data_combined.parquet')
            WHERE first_use_date<test_date
