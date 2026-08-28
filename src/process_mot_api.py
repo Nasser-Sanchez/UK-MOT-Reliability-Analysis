@@ -1,6 +1,6 @@
 """process_mot_api.py — Extract MOT API bulk/delta zips, flatten NDJSON, write Parquet.
 
-Streams .json_gz files from the bulk zip, explodes the nested motTests arrays
+Streams .json.gz files from the bulk zip, explodes the nested motTests arrays
 into flat rows, and writes parquet in batches.
 """
 
@@ -19,9 +19,11 @@ OUT_DIR = Path("data/mot_api_parquet")
 
 # Schema for the flattened output
 SCHEMA = pa.schema([
-    ("source", pa.string()),  # 'bulk' or 'delta'
+    ("source", pa.string()),
     ("registration", pa.string()),
     ("firstUsedDate", pa.string()),
+    ("registrationDate", pa.string()),
+    ("manufactureDate", pa.string()),
     ("make", pa.string()),
     ("model", pa.string()),
     ("fuelType", pa.string()),
@@ -32,24 +34,25 @@ SCHEMA = pa.schema([
     ("test_odometerUnit", pa.string()),
     ("test_motTestNumber", pa.uint64()),
     ("test_dataSource", pa.string()),
-    ("defects", pa.string()),  # JSON string of defect array
+    ("test_expiryDate", pa.string()),
+    ("test_registrationAtTimeOfTest", pa.string()),
+    ("defects", pa.string()),
 ])
 
 
 def flatten_vehicle(rec: dict, source: str) -> list[dict]:
-    """One vehicle record -> list of flat rows (one per motTest)."""
     rows = []
     tests = rec.get("motTests") or []
     for test in tests:
         if test.get("dataSource") == "dvla":
-            continue  # DVLA records have no test data
+            continue
         defects = test.get("defects") or []
-        defects_json = json.dumps(defects)
-        
         rows.append({
             "source": source,
             "registration": rec.get("registration"),
             "firstUsedDate": rec.get("firstUsedDate"),
+            "registrationDate": rec.get("registrationDate"),
+            "manufactureDate": rec.get("manufactureDate"),
             "make": rec.get("make"),
             "model": rec.get("model"),
             "fuelType": rec.get("fuelType"),
@@ -60,13 +63,14 @@ def flatten_vehicle(rec: dict, source: str) -> list[dict]:
             "test_odometerUnit": test.get("odometerUnit"),
             "test_motTestNumber": test.get("motTestNumber"),
             "test_dataSource": test.get("dataSource"),
-            "defects": defects_json,
+            "test_expiryDate": test.get("expiryDate"),
+            "test_registrationAtTimeOfTest": test.get("registrationAtTimeOfTest"),
+            "defects": json.dumps(defects),
         })
     return rows
 
 
 def write_batch(rows: list[dict], idx: int):
-    """Write a batch of rows to parquet."""
     table = pa.Table.from_pandas(
         __import__("pandas").DataFrame(rows),
         schema=SCHEMA,
@@ -76,41 +80,42 @@ def write_batch(rows: list[dict], idx: int):
     log.info("  -> %s (%d rows)", out_path.name, len(rows))
 
 
-def process_zip(zip_path: Path, source: str):
-    """Process a single zip file."""
+def process_zip(zip_path: Path, source: str, batch_rows: list, batch_size: int, parquet_idx: int):
     log.info("Processing %s (source: %s) ...", zip_path.name, source)
     
     with zipfile.ZipFile(zip_path, 'r') as z:
-        gz_files = [f for f in z.namelist() if f.endswith('.json_gz')]
-    
-    if not gz_files:
-        log.warning("No .json_gz files in %s", zip_path.name)
-        return
+        gz_files = [f for f in z.namelist() if f.endswith('.json.gz')]
+        
+        if not gz_files:
+            log.warning("No .json.gz files in %s", zip_path.name)
+            return batch_rows, parquet_idx
 
-    for gz_name in gz_files:
-        log.info("  Extracting & reading %s ...", gz_name)
-        with z.open(gz_name) as gz_file:
-            for line in gz_file:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                
-                batch_rows.extend(flatten_vehicle(rec, source))
-                
-                if len(batch_rows) >= batch_size:
-                    write_batch(batch_rows, parquet_idx)
-                    parquet_idx += 1
-                    batch_rows = []
+        for gz_name in gz_files:
+            log.info("  Reading %s ...", gz_name)
+            with z.open(gz_name) as gz_file:
+                with gzip.GzipFile(fileobj=gz_file) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        
+                        batch_rows.extend(flatten_vehicle(rec, source))
+                        
+                        if len(batch_rows) >= batch_size:
+                            write_batch(batch_rows, parquet_idx)
+                            parquet_idx += 1
+                            batch_rows = []
+    
+    return batch_rows, parquet_idx
 
 
 def process_files():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     
-    # Find zips in both dirs
     bulk_zips = sorted(BULK_DIR.glob("bulk-*.zip"))
     delta_zips = sorted(DELTA_DIR.glob("delta-*.zip"))
     
@@ -119,18 +124,15 @@ def process_files():
         return
 
     batch_rows = []
-    batch_size = 500_000  # Adjust based on RAM
+    batch_size = 500_000
     parquet_idx = len(list(OUT_DIR.glob("*.parquet"))) + 1
 
-    # Process bulk first
     for zip_path in bulk_zips:
-        process_zip(zip_path, "bulk")
+        batch_rows, parquet_idx = process_zip(zip_path, "bulk", batch_rows, batch_size, parquet_idx)
     
-    # Process deltas
     for zip_path in delta_zips:
-        process_zip(zip_path, "delta")
+        batch_rows, parquet_idx = process_zip(zip_path, "delta", batch_rows, batch_size, parquet_idx)
 
-    # Flush remaining
     if batch_rows:
         write_batch(batch_rows, parquet_idx)
 
