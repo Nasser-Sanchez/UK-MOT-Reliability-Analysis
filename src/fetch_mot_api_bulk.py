@@ -41,7 +41,10 @@ def get_access_token() -> str:
 
 # Bulk-download request
 def request_bulk_files(token: str) -> dict:
-    """GET /v1/trade/vehicles/bulk-download → returns {bulk: [...], delta: [...]}."""
+    """GET /v1/trade/vehicles/bulk-download → returns {bulk: [...], delta: [...]}.
+    
+    We only use the bulk portion; delta is fetched separately by fetch_mot_delta.py.
+    """
     headers = {
         "Authorization": f"Bearer {token}",
         "X-API-Key":     API_KEY,
@@ -93,12 +96,12 @@ def main():
     print("\n[1/3] Getting OAuth token …")
     token = get_access_token()
 
-    # 2. Request bulk + delta URLs
-    print("\n[2/3] Requesting file URLs…")
+    # 2. Request bulk URL
+    print("\n[2/3] Requesting bulk file URL…")
     files = request_bulk_files(token)
     bulk_files = files.get("bulk", [])
-    delta_files = files.get("delta", [])
-    print(f"  Found {len(bulk_files)} bulk file(s), {len(delta_files)} delta file(s)")
+    # Note: delta files are fetched separately by fetch_mot_api_delta.py
+    print(f"  Found {len(bulk_files)} bulk file(s)")
 
     # 3. Download bulk files
     print("\n[3/3] Downloading bulk files…")
@@ -109,12 +112,9 @@ def main():
         dest = BULK_DIR / name
         download_file(url, dest)
 
-
-
     print("\n" + "=" * 60)
     print("Done.")
     print(f"  Bulk files -> {BULK_DIR}")
-    print(f"  Delta files -> {DELTA_DIR}")
     print("=" * 60)
 
 
