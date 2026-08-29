@@ -32,17 +32,23 @@ SCHEMA = pa.schema([
     ("test_testResult", pa.string()),
     ("test_odometerValue", pa.string()),
     ("test_odometerUnit", pa.string()),
-    ("test_motTestNumber", pa.uint64()),
+    ("test_motTestNumber", pa.string()),
     ("test_dataSource", pa.string()),
     ("test_expiryDate", pa.string()),
     ("test_registrationAtTimeOfTest", pa.string()),
-    ("defects", pa.string()),
+    ("lastMotTestDate", pa.string()),
+    ("defect_count_fail", pa.int32()),
+    ("defect_count_advisory", pa.int32()),
+    ("defect_count_dangerous", pa.int32())
 ])
 
 
 def flatten_vehicle(rec: dict, source: str) -> list[dict]:
     rows = []
     tests = rec.get("motTests") or []
+    fail_count = sum(1 for d in defects if d.get("type") in ("DANGEROUS", "MAJOR"))
+    advisory_count = sum(1 for d in defects if d.get("type") in ("MINOR", "ADVISORY", "PRS"))
+    dangerous_count = sum(1 for d in defects if d.get("type") == "DANGEROUS")
     for test in tests:
         if test.get("dataSource") == "dvla":
             continue
@@ -65,7 +71,10 @@ def flatten_vehicle(rec: dict, source: str) -> list[dict]:
             "test_dataSource": test.get("dataSource"),
             "test_expiryDate": test.get("expiryDate"),
             "test_registrationAtTimeOfTest": test.get("registrationAtTimeOfTest"),
-            "defects": json.dumps(defects),
+            "lastMotTestDate": test.get("lastMotTestDate"),
+            "defect_count_fail": fail_count,
+            "defect_count_advisory": advisory_count,
+            "defect_count_dangerous": dangerous_count
         })
     return rows
 
@@ -124,14 +133,14 @@ def process_files():
         return
 
     batch_rows = []
-    batch_size = 500_000
+    batch_size = 5000000
     parquet_idx = len(list(OUT_DIR.glob("*.parquet"))) + 1
 
     for zip_path in bulk_zips:
         batch_rows, parquet_idx = process_zip(zip_path, "bulk", batch_rows, batch_size, parquet_idx)
     
-    for zip_path in delta_zips:
-        batch_rows, parquet_idx = process_zip(zip_path, "delta", batch_rows, batch_size, parquet_idx)
+    # for zip_path in delta_zips:
+    #     batch_rows, parquet_idx = process_zip(zip_path, "delta", batch_rows, batch_size, parquet_idx)
 
     if batch_rows:
         write_batch(batch_rows, parquet_idx)
