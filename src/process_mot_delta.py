@@ -81,7 +81,7 @@ def flatten_vehicle(rec: dict, source: str) -> list[dict]:
         return rows
     
     for test in tests:
-        if test.get("dataSource") == "dvla":
+        if test.get("dataSource").lower() == "dvla":
             continue
         defects = test.get("defects") or []
         fail_count = sum(1 for d in defects if d.get("type") in ("DANGEROUS", "MAJOR"))
