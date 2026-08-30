@@ -1,4 +1,4 @@
-"""process_mot_api.py — Extract MOT API bulk/delta zips, flatten NDJSON, write Parquet.
+"""process_mot_bulk.py — Extract MOT API bulk zip, flatten NDJSON, write Parquet.
 
 Streams .json.gz files from the bulk zip, explodes the nested motTests arrays
 into flat rows, and writes parquet in batches.
@@ -11,10 +11,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
-log = logging.getLogger("mot_api")
+log = logging.getLogger("mot_bulk")
 
 BULK_DIR = Path("data/mot_api_bulk")
-OUT_DIR = Path("data/mot_api_bulk_parquet")
+OUT_DIR = Path("data/mot_api_parquet")
 
 # Schema for the flattened output
 SCHEMA = pa.schema([
@@ -38,7 +38,7 @@ SCHEMA = pa.schema([
     ("lastMotTestDate", pa.string()),
     ("defect_count_fail", pa.int32()),
     ("defect_count_advisory", pa.int32()),
-    ("defect_count_dangerous", pa.int32())
+    ("defect_count_dangerous", pa.int32()),
 ])
 
 
@@ -73,7 +73,7 @@ def flatten_vehicle(rec: dict, source: str) -> list[dict]:
             "lastMotTestDate": test.get("lastMotTestDate"),
             "defect_count_fail": fail_count,
             "defect_count_advisory": advisory_count,
-            "defect_count_dangerous": dangerous_count
+            "defect_count_dangerous": dangerous_count,
         })
     return rows
 
@@ -88,13 +88,13 @@ def write_batch(rows: list[dict], idx: int):
             df[col] = df[col].astype("string")
     
     table = pa.Table.from_pandas(df, schema=SCHEMA)
-    out_path = OUT_DIR / f"mot_api_batch_{idx}.parquet"
+    out_path = OUT_DIR / f"mot_bulk_batch_{idx}.parquet"
     pq.write_table(table, out_path)
     log.info("  -> %s (%d rows)", out_path.name, len(rows))
 
 
-def process_zip(zip_path: Path, source: str, batch_rows: list, batch_size: int, parquet_idx: int):
-    log.info("Processing %s (source: %s) ...", zip_path.name, source)
+def process_bulk_zip(zip_path: Path, batch_rows: list, batch_size: int, parquet_idx: int):
+    log.info("Processing bulk %s ...", zip_path.name)
     
     with zipfile.ZipFile(zip_path, 'r') as z:
         gz_files = [f for f in z.namelist() if f.endswith('.json.gz')]
@@ -116,7 +116,7 @@ def process_zip(zip_path: Path, source: str, batch_rows: list, batch_size: int, 
                         except json.JSONDecodeError:
                             continue
                         
-                        batch_rows.extend(flatten_vehicle(rec, source))
+                        batch_rows.extend(flatten_vehicle(rec, "bulk"))
                         
                         if len(batch_rows) >= batch_size:
                             write_batch(batch_rows, parquet_idx)
@@ -126,33 +126,29 @@ def process_zip(zip_path: Path, source: str, batch_rows: list, batch_size: int, 
     return batch_rows, parquet_idx
 
 
-def process_files():
+def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     
     bulk_zips = sorted(BULK_DIR.glob("bulk-*.zip"))
-    # delta_zips = sorted(DELTA_DIR.glob("delta-*.zip"))  <-- Comment out or remove
     
-    if not bulk_zips: # and not delta_zips:  <-- Simplify check
+    if not bulk_zips:
         log.error("No bulk zip files found in %s", BULK_DIR)
         return
 
     batch_rows = []
-    batch_size = 5000000
-    parquet_idx = len(list(OUT_DIR.glob("*.parquet"))) + 1
+    batch_size = 5_000_000
+    parquet_idx = len(list(OUT_DIR.glob("mot_bulk_batch_*.parquet"))) + 1
 
     for zip_path in bulk_zips:
-        batch_rows, parquet_idx = process_zip(zip_path, "bulk", batch_rows, batch_size, parquet_idx)
-    
-    # for zip_path in delta_zips:  <-- Remove this loop
-    #     batch_rows, parquet_idx = process_zip(zip_path, "delta", batch_rows, batch_size, parquet_idx)
+        batch_rows, parquet_idx = process_bulk_zip(zip_path, batch_rows, batch_size, parquet_idx)
 
     if batch_rows:
         write_batch(batch_rows, parquet_idx)
 
     log.info("\nDone. Parquet files in %s:", OUT_DIR)
-    for f in sorted(OUT_DIR.iterdir()):
+    for f in sorted(OUT_DIR.glob("mot_bulk_batch_*.parquet")):
         log.info("  %s  (%.1f MB)", f.name, f.stat().st_size / 1e6)
 
 
 if __name__ == "__main__":
-    process_files()
+    main()
