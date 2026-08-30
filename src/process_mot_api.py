@@ -14,8 +14,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datef
 log = logging.getLogger("mot_api")
 
 BULK_DIR = Path("data/mot_api_bulk")
-DELTA_DIR = Path("data/mot_api_delta")
-OUT_DIR = Path("data/mot_api_parquet")
+OUT_DIR = Path("data/mot_api_bulk_parquet")
 
 # Schema for the flattened output
 SCHEMA = pa.schema([
@@ -46,13 +45,13 @@ SCHEMA = pa.schema([
 def flatten_vehicle(rec: dict, source: str) -> list[dict]:
     rows = []
     tests = rec.get("motTests") or []
-    fail_count = sum(1 for d in defects if d.get("type") in ("DANGEROUS", "MAJOR"))
-    advisory_count = sum(1 for d in defects if d.get("type") in ("MINOR", "ADVISORY", "PRS"))
-    dangerous_count = sum(1 for d in defects if d.get("type") == "DANGEROUS")
     for test in tests:
         if test.get("dataSource") == "dvla":
             continue
         defects = test.get("defects") or []
+        fail_count = sum(1 for d in defects if d.get("type") in ("DANGEROUS", "MAJOR"))
+        advisory_count = sum(1 for d in defects if d.get("type") in ("MINOR", "ADVISORY", "PRS"))
+        dangerous_count = sum(1 for d in defects if d.get("type") == "DANGEROUS")
         rows.append({
             "source": source,
             "registration": rec.get("registration"),
@@ -80,10 +79,15 @@ def flatten_vehicle(rec: dict, source: str) -> list[dict]:
 
 
 def write_batch(rows: list[dict], idx: int):
-    table = pa.Table.from_pandas(
-        __import__("pandas").DataFrame(rows),
-        schema=SCHEMA,
-    )
+    df = __import__("pandas").DataFrame(rows)
+    
+    # Convert all string-schema columns to string type, handling NaN → None
+    string_cols = [f.name for f in SCHEMA if f.type == pa.string()]
+    for col in string_cols:
+        if col in df.columns:
+            df[col] = df[col].astype("string")
+    
+    table = pa.Table.from_pandas(df, schema=SCHEMA)
     out_path = OUT_DIR / f"mot_api_batch_{idx}.parquet"
     pq.write_table(table, out_path)
     log.info("  -> %s (%d rows)", out_path.name, len(rows))
@@ -126,10 +130,10 @@ def process_files():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     
     bulk_zips = sorted(BULK_DIR.glob("bulk-*.zip"))
-    delta_zips = sorted(DELTA_DIR.glob("delta-*.zip"))
+    # delta_zips = sorted(DELTA_DIR.glob("delta-*.zip"))  <-- Comment out or remove
     
-    if not bulk_zips and not delta_zips:
-        log.error("No zip files found in %s or %s", BULK_DIR, DELTA_DIR)
+    if not bulk_zips: # and not delta_zips:  <-- Simplify check
+        log.error("No bulk zip files found in %s", BULK_DIR)
         return
 
     batch_rows = []
@@ -139,7 +143,7 @@ def process_files():
     for zip_path in bulk_zips:
         batch_rows, parquet_idx = process_zip(zip_path, "bulk", batch_rows, batch_size, parquet_idx)
     
-    # for zip_path in delta_zips:
+    # for zip_path in delta_zips:  <-- Remove this loop
     #     batch_rows, parquet_idx = process_zip(zip_path, "delta", batch_rows, batch_size, parquet_idx)
 
     if batch_rows:
