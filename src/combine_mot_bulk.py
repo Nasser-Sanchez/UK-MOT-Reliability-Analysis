@@ -56,7 +56,7 @@ query = """
         )
     )
 
-    SELECT p.*, 
+    SELECT p.*
     FROM preprocess p
     LEFT JOIN bad_groups b USING(vehicle_id)
     WHERE b.vehicle_id IS NULL

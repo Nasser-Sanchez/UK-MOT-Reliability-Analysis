@@ -17,12 +17,12 @@ con.execute("""
             ) AS interval_censored,
             IF(
                 interval_censored=1,
-                mileage+(mileage/years)/2,
+                mileage+(mileage/years),
                 mileage
             ) AS mileage_estimate,
             IF(
                 interval_censored=1,
-                years+0.5,
+                years+1,
                 years
             ) AS years_estimate,
             
@@ -47,8 +47,8 @@ con.execute("""
            
         )
     
-        SELECT make, model, fuelType, engineSize_bucket, defect_count_advisory, defect_count_dangerous,
-        years_estimate, mileage_estimate, event_interval AS event
-        FROM last_test_prep WHERE last_test=1 AND mileage_estimate<3000000 AND NOT isinf(mileage_estimate)
+        SELECT make, model, fuelType, engineSize, engineSize_bucket, defect_count_advisory, defect_count_dangerous,
+        years, mileage, event, years_estimate, mileage_estimate, event_interval
+        FROM last_test_prep WHERE last_test=1 AND mileage_estimate<3000000 AND NOT isinf(mileage_estimate) --AND event_interval=1
     ) TO 'data/mot_last_test.parquet' (FORMAT PARQUET); 
 """)
