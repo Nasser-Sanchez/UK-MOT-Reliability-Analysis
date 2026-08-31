@@ -17,21 +17,29 @@ con.execute("""
             ) AS interval_censored,
             IF(
                 interval_censored=1,
-                mileage+15000,
+                mileage+(mileage/years)/2,
                 mileage
-            ) AS mileage_interval,
+            ) AS mileage_estimate,
             IF(
                 interval_censored=1,
-                years+(13/12),
+                years+0.5,
                 years
-            ) AS years_interval,
+            ) AS years_estimate,
             
            make, model, 
            fuelType, engineSize,
+        CASE
+            WHEN engineSize = 0 OR engineSize IS NULL THEN 'Electric'
+            WHEN engineSize < 1000 THEN '<1000'
+            WHEN engineSize > 7000 THEN '7000+'
+            ELSE
+                (FLOOR(engineSize / 500) * 500)::VARCHAR || '-' || 
+                (FLOOR(engineSize / 500) * 500 + 499)::VARCHAR
+        END AS engineSize_bucket,
            SUM(defect_count_advisory)OVER(PARTITION BY vehicle_id) AS defect_count_advisory,
            SUM(defect_count_dangerous)OVER(PARTITION BY vehicle_id) AS defect_count_dangerous,
-           firstusedDate AS start_date, CAST(test_completedDate AS DATE) AS end_date, last_test,
-           1 AS event_interval
+           last_test,
+           IF(interval_censored=1, 1, event) AS event_interval
            
            FROM read_parquet('data/mot_data_combined.parquet') d
            JOIN max_date m ON 1=1
@@ -39,6 +47,8 @@ con.execute("""
            
         )
     
-        SELECT * EXCLUDE(last_test) FROM last_test_prep WHERE last_test=1 AND mileage_interval<3000000 AND NOT isinf(mileage_interval)
+        SELECT make, model, fuelType, engineSize_bucket, defect_count_advisory, defect_count_dangerous,
+        years_estimate, mileage_estimate, event_interval AS event
+        FROM last_test_prep WHERE last_test=1 AND mileage_estimate<3000000 AND NOT isinf(mileage_estimate)
     ) TO 'data/mot_last_test.parquet' (FORMAT PARQUET); 
 """)
