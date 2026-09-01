@@ -1,6 +1,9 @@
 import duckdb
 
 con = duckdb.connect("uk_car_analyser.duckdb")
+con.execute("SET preserve_insertion_order = false;")
+con.execute("SET temp_directory = 'data/duckdb_temp';")
+con.execute("SET threads = 8;")  # Match your physical cores
 
 query = """
     WITH preprocess AS(
@@ -26,20 +29,19 @@ query = """
         CAST(defect_count_fail AS INT32) AS defect_count_fail,
         CAST(defect_count_advisory AS INT32) AS defect_count_advisory,
         CAST(defect_count_dangerous AS INT32) AS defect_count_dangerous,
-        DENSE_RANK()OVER(ORDER BY registration, manufactureDate) AS vehicle_id,
-        ROW_NUMBER()OVER(PARTITION BY registration, manufactureDate ORDER BY test_completedDate DESC) AS last_test
+        
 
             
                 
         
-        FROM read_parquet('data/mot_api_bulk_parquet/mot_bulk*.parquet')
+        FROM read_parquet('data/mot_api_parquet/mot_bulk*.parquet')
     ),
     
-    bad_groups AS(
+    valid_data AS(
 
-    SELECT vehicle_id
-    FROM preprocess
-    WHERE NOT(mileage BETWEEN 1 AND 3000000
+    SELECT *,
+    bool_and(
+        mileage BETWEEN 1 AND 3000000
         AND mileage IS NOT NULL
         AND firstUsedDate IS NOT NULL
         AND registration IS NOT NULL
@@ -50,17 +52,17 @@ query = """
             (CAST(engineSize AS INT32) BETWEEN  999 AND 7000) 
             OR fuelType = 'Electric' 
         )
-        AND CAST(firstUsedDate AS DATE)<=CAST(test_completedDate AS DATE)
+        AND firstUsedDate<=CAST(test_completedDate AS DATE)
         AND event IS NOT NULL
         AND manufactureDate>='1990-01-01'
-        )
+    )OVER (PARTITION BY registration) AS is_valid_group
+    FROM preprocess
+    QUALIFY is_valid_group=TRUE
     )
 
-    SELECT p.*
-    FROM preprocess p
-    LEFT JOIN bad_groups b USING(vehicle_id)
-    WHERE b.vehicle_id IS NULL
-    
+    SELECT *,
+    ROW_NUMBER() OVER (PARTITION BY registration ORDER BY test_completedDate DESC) AS last_test
+    FROM valid_data    
 """
 
 # Save the result
