@@ -3605,7 +3605,7 @@ wheels = [
 [[package]]
 name = "uk-car-analyser"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "cryptography" },
