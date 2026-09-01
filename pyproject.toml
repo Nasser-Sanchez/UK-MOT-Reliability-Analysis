@@ -32,10 +32,3 @@ dependencies = [
     "seaborn>=0.13.2",
     "xgboost>=3.2.0",
 ]
-
-[project.scripts]
-uk-car-analyser = "uk_car_analyser:main"
-
-[build-system]
-requires = ["uv_build>=0.12.0,<0.13.0"]
-build-backend = "uv_build"
