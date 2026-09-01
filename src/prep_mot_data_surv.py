@@ -36,8 +36,8 @@ con.execute("""
                 (FLOOR(engineSize / 500) * 500)::VARCHAR || '-' || 
                 (FLOOR(engineSize / 500) * 500 + 499)::VARCHAR
         END AS engineSize_bucket,
-           SUM(defect_count_advisory)OVER(PARTITION BY vehicle_id) AS defect_count_advisory,
-           SUM(defect_count_dangerous)OVER(PARTITION BY vehicle_id) AS defect_count_dangerous,
+           SUM(defect_count_advisory)OVER(PARTITION BY registration) AS defect_count_advisory,
+           SUM(defect_count_dangerous)OVER(PARTITION BY registration) AS defect_count_dangerous,
            last_test,
            IF(interval_censored=1, 1, event) AS event_interval
            
@@ -47,7 +47,7 @@ con.execute("""
            
         )
     
-        SELECT make, model, fuelType, engineSize, engineSize_bucket, defect_count_advisory, defect_count_dangerous,
+        SELECT registration, make, model, fuelType, engineSize, engineSize_bucket, defect_count_advisory, defect_count_dangerous,
         years, mileage, event, years_estimate, mileage_estimate, event_interval
         FROM last_test_prep WHERE last_test=1 AND mileage_estimate<3000000 AND NOT isinf(mileage_estimate) --AND event_interval=1
     ) TO 'data/mot_last_test.parquet' (FORMAT PARQUET); 

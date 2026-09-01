@@ -60,7 +60,7 @@ query = """
     QUALIFY is_valid_group=TRUE
     )
 
-    SELECT *,
+    SELECT * EXCLUDE(is_valid_group),
     ROW_NUMBER() OVER (PARTITION BY registration ORDER BY test_completedDate DESC) AS last_test
     FROM valid_data    
 """
