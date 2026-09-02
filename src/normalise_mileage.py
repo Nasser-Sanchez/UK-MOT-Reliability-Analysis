@@ -15,6 +15,7 @@ def compute_and_save_stats():
             AVG(mileage_estimate) as mean_mileage,
             STDDEV(mileage_estimate) as std_mileage
         FROM read_parquet('{MOT_DATA}')
+        WHERE event = 1
     """).df()
     
     mean_val = stats['mean_mileage'].iloc[0]
