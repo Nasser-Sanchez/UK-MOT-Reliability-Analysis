@@ -20,6 +20,7 @@ dependencies = [
     "lightgbm>=4.7.0",
     "matplotlib>=3.11.1",
     "numpy>=2.4.6",
+    "numpyro>=0.21.0",
     "nutpie>=0.16.8",
     "pandas>=2.3.3",
     "playwright>=1.62.0",
