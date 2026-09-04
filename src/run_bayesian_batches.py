@@ -93,27 +93,27 @@ def main(batch_size: int, num_batches: int):
             continue
             
         # Run Model
-        try:
-            trace, new_state, diagnostics = run_streaming_batch(batch_df, state)
+        #try:
+        trace, new_state, diagnostics = run_streaming_batch(batch_df, state)
+        
+        # Update State & Registrations
+        state = new_state
+        processed_regs.update(batch_df['registration'].tolist())
+        
+        # Save State, Diagnostics, and Trace
+        save_state(state, diagnostics, trace)
+        
+        # Save registrations
+        pd.DataFrame({'registration': list(processed_regs)}).to_csv(REGISTRATIONS_PATH, index=False)
+        
+        logger.info(f"Batch {batch_num} complete. Total processed: {len(processed_regs)}")
             
-            # Update State & Registrations
-            state = new_state
-            processed_regs.update(batch_df['registration'].tolist())
-            
-            # Save State, Diagnostics, and Trace
-            save_state(state, diagnostics, trace)
-            
-            # Save registrations
-            pd.DataFrame({'registration': list(processed_regs)}).to_csv(REGISTRATIONS_PATH, index=False)
-            
-            logger.info(f"Batch {batch_num} complete. Total processed: {len(processed_regs)}")
-            
-        except Exception as e:
-            logger.error(f"Batch {batch_num} failed: {e}")
-            logger.info("Skipping batch and continuing.")
-            # Update processed regs to avoid re-processing failed batch
-            # processed_regs.update(batch_df['registration'].tolist())
-            # pd.DataFrame({'registration': list(processed_regs)}).to_csv(REGISTRATIONS_PATH, index=False)
+        # except Exception as e:
+        #     logger.error(f"Batch {batch_num} failed: {e}")
+        #     logger.info("Skipping batch and continuing.")
+        #     # Update processed regs to avoid re-processing failed batch
+        #     # processed_regs.update(batch_df['registration'].tolist())
+        #     # pd.DataFrame({'registration': list(processed_regs)}).to_csv(REGISTRATIONS_PATH, index=False)
             
     con.close()
     logger.info("Streaming complete.")
