@@ -217,8 +217,8 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         # nutpie does not support PyMC's init_start parameter; let it handle init automatically
         trace = pm.sample(
             draws=5000, 
-            tune=2000, 
-            target_accept=0.9, 
+            tune=1500, 
+            target_accept=0.95, 
             random_seed=123456, 
             return_inferencedata=True, 
             nuts_sampler="nutpie",
@@ -246,7 +246,8 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
     #     logger.warning(f"Batch diagnostics failed: {diagnostics}")
     #     raise ValueError("Batch failed diagnostics. Skipping.")
     
-    logger.info(f"Batch successful. Divergences: {div_count}, Max R-hat: {rhat.max():.4f}")
+    rhat_max = float(rhat.to_array().values.flatten().max())
+    logger.info(f"Batch successful. Divergences: {div_count}, Max R-hat: {rhat_max:.4f}")
     
     # 6. Update State
     new_state = {
