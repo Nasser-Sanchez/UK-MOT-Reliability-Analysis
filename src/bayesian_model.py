@@ -135,15 +135,14 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         if state:
             mu_global = pm.Normal('mu_global', mu=state['global_params']['mu_global'], 
                                 sigma=state['global_params_std']['mu_global'] / 2)
-            sigma_global = pm.HalfNormal('sigma_global', mu=state['global_params']['sigma_global'], 
-                                        sigma=state['global_params_std']['sigma_global'] / 2)
-            sigma_make = pm.HalfStudentT('sigma_make', mu=state['hyper_params']['sigma_make'], 
+            sigma_global = pm.HalfNormal('sigma_global', sigma=state['global_params']['sigma_global'])
+            sigma_make = pm.HalfStudentT('sigma_make', nu=state['hyper_params']['sigma_make'], 
                                     sigma=state['hyper_params_std']['sigma_make'] / 2)
-            sigma_model = pm.HalfStudentT('sigma_model', mu=state['hyper_params']['sigma_model'], 
+            sigma_model = pm.HalfStudentT('sigma_model', nu=state['hyper_params']['sigma_model'], 
                                         sigma=state['hyper_params_std']['sigma_model'] / 2)
-            sigma_engine = pm.HalfStudentT('sigma_engine', mu=state['hyper_params']['sigma_engine'], 
+            sigma_engine = pm.HalfStudentT('sigma_engine', nu=state['hyper_params']['sigma_engine'], 
                                         sigma=state['hyper_params_std']['sigma_engine'] / 2)
-            sigma_fuel = pm.HalfStudentT('sigma_fuel', mu=state['hyper_params']['sigma_fuel'], 
+            sigma_fuel = pm.HalfStudentT('sigma_fuel', nu=state['hyper_params']['sigma_fuel'], 
                                     sigma=state['hyper_params_std']['sigma_fuel'] / 2)
             
             # FIX: Load beta priors from state
@@ -216,8 +215,8 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         logger.info("Starting MCMC sampling...")
         # nutpie does not support PyMC's init_start parameter; let it handle init automatically
         trace = pm.sample(
-            draws=5000, 
-            tune=1500, 
+            draws=2000, 
+            tune=750, 
             target_accept=0.95, 
             random_seed=123456, 
             return_inferencedata=True, 
