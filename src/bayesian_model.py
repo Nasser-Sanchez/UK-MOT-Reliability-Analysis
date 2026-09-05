@@ -135,7 +135,7 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         if state:
             mu_global = pm.Normal('mu_global', mu=state['global_params']['mu_global'], 
                                 sigma=state['global_params_std']['mu_global'] / 2)
-            sigma_global = pm.HalfNormal('sigma_global', sigma=state['global_params']['sigma_global'])
+            sigma_global = pm.HalfStudentT('sigma_global', nu=3, sigma=state['global_params']['sigma_global'])
             sigma_make = pm.HalfStudentT('sigma_make', nu=state['hyper_params']['sigma_make'], 
                                     sigma=state['hyper_params_std']['sigma_make'] / 2)
             sigma_model = pm.HalfStudentT('sigma_model', nu=state['hyper_params']['sigma_model'], 
