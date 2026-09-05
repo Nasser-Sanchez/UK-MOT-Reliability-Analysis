@@ -6,6 +6,19 @@ con.execute("""
             SELECT MAX(CAST(test_completedDate AS DATE)) AS last_mot_date
             FROM read_parquet('data/mot_data_combined.parquet')
         ),
+        valid_makes AS (
+            SELECT make
+            FROM read_parquet('data/mot_data_combined.parquet')
+            GROUP BY make
+            HAVING COUNT(*) > 20
+        ),
+        
+        valid_models AS (
+            SELECT model
+            FROM read_parquet('data/mot_data_combined.parquet')
+            GROUP BY model
+            HAVING COUNT(*) > 5
+        ),
         
         last_test_prep AS(
            SELECT registration, firstUsedDate, years, mileage, 
@@ -49,6 +62,11 @@ con.execute("""
     
         SELECT registration, make, model, fuelType, engineSize, engineSize_bucket, defect_count_advisory, defect_count_dangerous,
         years, mileage, event, years_estimate, mileage_estimate, event_interval
-        FROM last_test_prep WHERE last_test=1 AND mileage_estimate<3000000 AND NOT isinf(mileage_estimate) --AND event_interval=1
+        FROM last_test_prep 
+        WHERE last_test=1 AND mileage_estimate<3000000 
+        AND NOT isinf(mileage_estimate) 
+        AND make IN (SELECT make FROM valid_makes)
+        AND model IN (SELECT model FROM valid_models)
+
     ) TO 'data/mot_last_test.parquet' (FORMAT PARQUET); 
 """)
