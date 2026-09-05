@@ -19,6 +19,7 @@ dependencies = [
     "lifelines>=0.30.3",
     "lightgbm>=4.7.0",
     "matplotlib>=3.11.1",
+    "mkl>=2026.1.0",
     "numpy>=2.4.6",
     "numpyro>=0.21.0",
     "nutpie>=0.16.8",
