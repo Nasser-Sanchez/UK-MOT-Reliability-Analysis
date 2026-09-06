@@ -32,6 +32,7 @@ jupyterlab = ">=4.6.3,<5"
 ipykernel = ">=7.3.0,<8"
 mkl = ">=2026.1.0,<2027"
 mkl-service = ">=2.8.0,<3"
+netcdf4 = ">=1.7.4,<2"
 
 [pypi-dependencies]
 duckdb-engine = ">=0.17.0, <0.18"
