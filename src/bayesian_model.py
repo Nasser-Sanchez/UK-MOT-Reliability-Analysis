@@ -24,7 +24,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('model_run.log', mode='a'),
+        logging.FileHandler('data/model_run.log', mode='a'),
         logging.StreamHandler()
     ]
 )
@@ -69,7 +69,7 @@ def save_state(state, diagnostics, trace):
         df_diag.to_csv(DIAGNOSTICS_PATH, mode='w', header=True, index=False)
         
     # 3. Save Full Trace for Prediction (Arviz NetCDF format)
-    trace.to_netcdf("model_trace_latest.nc")
+    trace.to_netcdf("data/model_trace_latest.nc")
 
 
 def get_priors_for_categories(categories, state, level):
