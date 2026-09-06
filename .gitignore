@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+.pixi
 
 # Docs and data
 docs/
@@ -15,3 +16,8 @@ data/
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+.vscode
