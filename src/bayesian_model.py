@@ -4,7 +4,8 @@ Streaming Hierarchical Weibull Model.
 
 import os
 import pytensor
-pytensor.config.mode = 'NUMBA'  # Bypasses the need for system BLAS
+pytensor.config.cxx = ""  # Disables C++ compilation
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import json
 import logging
@@ -68,7 +69,7 @@ def save_state(state, diagnostics, trace):
         df_diag.to_csv(DIAGNOSTICS_PATH, mode='w', header=True, index=False)
         
     # 3. Save Full Trace for Prediction (Arviz NetCDF format)
-    az.to_netcdf(trace, "model_trace_latest.nc")
+    trace.to_netcdf("model_trace_latest.nc")
 
 
 def get_priors_for_categories(categories, state, level):
@@ -214,59 +215,45 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
 
 
         # 4. Sampling
-        logger.info("Running ADVI Sampler...")
+        logger.info("Running MCMC Sampler...")
         
         # n_particles controls the resolution of the approximation. 
         # 100 is a good default. Increase if you need more detail.
-        fit = pm.fit(
-            n=50000,
-            method="advi",
-            random_seed=123456,
-            progressbar=True
+        trace = pm.sample(
+            draws=2000,
+            tune=750,
+            target_accept=0.95,
+            random_seed=123,
+            backend="jax"
+            
         )
-        logger.info(f"ADVI finished. Loss: {fit.hist[-1]:.2f}")
-
-        # 3. Draw samples from the learned flow
-        n_draws = 5000
-        logger.info(f"Drawing {n_draws} posterior samples from flow...")
-        trace = fit.sample(n_draws)
 
         # 7. Convert to numpy arrays explicitly to fix the arviz error
          # Calculate ESS (Effective Sample Size) on the generated ADVI samples
-        ess = az.ess(trace.posterior, var_names=['mu_global', 'sigma_global'])
-        ess_vals = ess.to_array().values.flatten()
+        # ess = az.ess(trace.posterior, var_names=['mu_global', 'sigma_global'])
+        # ess_vals = ess.to_array().values.flatten()
 
-    diagnostics = {
-        'batch_size': len(batch_df),
-        'min_ess': float(ess_vals.min()),
-        # Success logic adapted for ADVI (ignoring R-hat and divergences)
-    }
+    # diagnostics = {
+    #     'batch_size': len(batch_df),
+    #     'min_ess': float(ess_vals.min()),
+    #     # Success logic adapted for ADVI (ignoring R-hat and divergences)
+    # }
+    diagnostics={
+        'batch_size':1
 
+        }
     # if not diagnostics['success']:
     #     logger.warning(f"Batch diagnostics failed: {diagnostics}")
     #     raise ValueError("Batch failed diagnostics. Skipping.")
 
 
     # 5. Diagnostics
-    plt.figure(figsize=(10, 6))
-    plt.plot(fit.hist[-3000:], label='ELBO')
-    plt.title('ADVI ELBO History')
-    plt.xlabel('Iteration')
-    plt.ylabel('ELBO')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig('data/elbo_history.png')
-    plt.close()
-    logger.info("ELBO history saved to 'elbo_history.png'")
 
 
-    diagnostics = {
-        'batch_size': len(batch_df),
-        'elbo_final': float(fit.hist[-1]),
-    }
+
+
     
     
-    logger.info(f"ADVI complete. ELBO final: {fit.hist[-1]:.2f}")
     
     # 6. Update State
     new_state = {
