@@ -3,7 +3,8 @@ Streaming Hierarchical Weibull Model.
 """
 
 import os
-import jax.numpy as jnp
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 import matplotlib.pyplot as plt
 import json
 import logging
@@ -11,8 +12,13 @@ import duckdb
 import pandas as pd
 import numpy as np
 import pymc as pm
-pm.config.backend = "jax"
 import arviz as az
+import jax
+jax.config.update("jax_platform_name", "gpu")
+jax.config.update("jax_enable_x64", False)
+import pytensor
+pytensor.config.floatX = "float32"
+import pymc.sampling.jax as pmjax
 from src.encode_cat_vars import encode_dataframe, load_mappings, compute_and_save_mappings  # Load mappings helper
 
 # encoding for categorical variables
@@ -223,7 +229,8 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             tune=750,
             target_accept=0.95,
             random_seed=123,
-            backend="jax"
+            nuts_sampler="nutpie",      
+            nuts_sampler_kwargs=dict(backend="jax")
             
         )
 
