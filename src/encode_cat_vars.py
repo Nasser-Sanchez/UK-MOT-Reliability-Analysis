@@ -10,6 +10,7 @@ def compute_and_save_mappings(data_path="data/mot_last_test.parquet", output_dir
     """
     os.makedirs(output_dir, exist_ok=True)
     
+    # Original columns
     cols = ['make', 'model', 'fuelType', 'engineSize_bucket']
     
     # Check if all mapping files already exist
@@ -18,7 +19,10 @@ def compute_and_save_mappings(data_path="data/mot_last_test.parquet", output_dir
         for col in cols
     )
     
-    if all_exist:
+    # Check if make_model mapping exists
+    make_model_exists = os.path.exists(f"{output_dir}/make_model_mapping.csv")
+    
+    if all_exist and make_model_exists:
         print("Mapping files already exist. Skipping computation.")
         return load_mappings(output_dir)
     
@@ -34,6 +38,7 @@ def compute_and_save_mappings(data_path="data/mot_last_test.parquet", output_dir
     
     mappings = {}
     
+    # 1. Standard Mappings
     for col in cols:
         # Get unique values and sort them for consistency
         unique_vals = sorted(df[col].dropna().unique())
@@ -46,6 +51,17 @@ def compute_and_save_mappings(data_path="data/mot_last_test.parquet", output_dir
         df_map = pd.DataFrame(list(mapping.items()), columns=['category', 'id'])
         df_map.to_csv(f"{output_dir}/{col}_mapping.csv", index=False)
         
+    # 2. Combined make_model Mapping
+    # Create a combined key to avoid ambiguity (e.g., "Focus" could be Ford or Mazda)
+    df['make_model'] = df['make'].astype(str) + '_' + df['model'].astype(str)
+    unique_make_models = sorted(df['make_model'].dropna().unique())
+    
+    make_model_mapping = {val: idx for idx, val in enumerate(unique_make_models)}
+    mappings['make_model'] = make_model_mapping
+    
+    df_map_mm = pd.DataFrame(list(make_model_mapping.items()), columns=['category', 'id'])
+    df_map_mm.to_csv(f"{output_dir}/make_model_mapping.csv", index=False)
+    
     print(f"Mappings saved to {output_dir}/")
     return mappings
 
@@ -53,7 +69,8 @@ def load_mappings(output_dir="data"):
     """
     Loads mappings from CSV files.
     """
-    cols = ['make', 'model', 'fuelType', 'engineSize_bucket']
+    # Include make_model in the list of columns to load
+    cols = ['make', 'model', 'fuelType', 'engineSize_bucket', 'make_model']
     mappings = {}
     
     for col in cols:
