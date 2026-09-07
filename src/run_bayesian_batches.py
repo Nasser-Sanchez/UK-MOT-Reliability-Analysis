@@ -2,7 +2,7 @@
 Orchestrator for streaming Bayesian model updates.
 
 Usage:
-    python src/run_batches.py --batch_size 50000 --num_batches 1
+    python src/run_bayesian_batches.py --batch_size 50000 --num_batches 1
 
 """
 

@@ -3,8 +3,6 @@ Streaming Hierarchical Weibull Model.
 """
 
 import os
-import pytensor
-pytensor.config.cxx = ""  # Disables C++ compilation
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import json
@@ -13,6 +11,7 @@ import duckdb
 import pandas as pd
 import numpy as np
 import pymc as pm
+pm.config.backend = "jax"
 import arviz as az
 from src.encode_cat_vars import encode_dataframe, load_mappings, compute_and_save_mappings  # Load mappings helper
 
