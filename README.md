@@ -69,7 +69,7 @@ MOT API (bulk + delta)
   - `engine_effect`: per engine-size-bucket offset
   - `fuel_effect`: per fuel-type offset
 - **Inference**: MCMC (NUTS via nutpie), 1000 draws + 1000 tune per batch
-- **Warm-start**: Each batch's posterior means/stds become the prior for the next batch. `batch_number` tracks progress (currently 1).
+- **Warm-start**: Each batch's posterior means/stds become the prior for the next batch. `batch_number` tracks progress.
 
 **Prediction**: Posterior samples are applied to `mot_last_test.parquet` to produce per-vehicle terminal mileage (median, mean, P75) and remaining life estimates.
 
@@ -174,8 +174,7 @@ streamlit run app/streamlit_app.py
 
 ## Planned work
 
-- [ ] Add confidence intervals (P25/P90) to prediction output
-- [ ] Batch registration upload for bulk lookups
+- [ ] Add credible intervals to prediction output
 - [ ] Interactive visualisation dashboard (Plotly)
 - [ ] **Used car value calculator** -- user inputs price, current mileage, and registration; app calculates mean/median/P75 remaining miles per pound and ranks against similar vehicles
 - [ ] **Used car listing ranking** -- scrape UK used car listings and rank them by mean/median/P75 remaining miles per pound
