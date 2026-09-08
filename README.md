@@ -38,7 +38,7 @@ MOT API (bulk + delta)
     [predict_bayes_weib.py] -- apply posterior samples to mot_last_test.parquet -> terminal_predictions/
                |
                v
-    [app/streamlit_app.py]  -- v1.0 frontend: registration lookup via DuckDB
+    [app/streamlit_app.py]  -- frontend: registration lookup via DuckDB
 ```
 
 ## Data
@@ -72,6 +72,25 @@ MOT API (bulk + delta)
 - **Warm-start**: Each batch's posterior means/stds become the prior for the next batch. `batch_number` tracks progress.
 
 **Prediction**: Posterior samples are applied to `mot_last_test.parquet` to produce per-vehicle terminal mileage (median, mean, P75) and remaining life estimates.
+
+## Frontend
+
+The Streamlit app (`app/streamlit_app.py`) provides:
+
+- **Registration lookup** -- search any UK registration to retrieve vehicle details, current MOT status, and terminal mileage predictions.
+- **Ownership cost calculator** -- optional inputs for car price and annual mileage (defaults to 7,000) that compute years remaining, cost per year, and cost per mile based on the predicted remaining life.
+- **Dataset overview** -- aggregate statistics across all vehicles in the prediction dataset.
+
+## Docker
+
+The project is fully containerised. Build and run:
+
+```bash
+docker build -t uk-car-analyser .
+docker run -p 8501:8501 uk-car-analyser
+```
+
+The Streamlit server is exposed on port 8501. Open `http://localhost:8501` in your browser.
 
 ## Caveats
 
@@ -151,8 +170,13 @@ uv run src/predict_bayes_weib.py --batch-size 10000000
 ### 5. Run the frontend
 
 ```bash
+# Local
 pip install streamlit duckdb
 streamlit run app/streamlit_app.py
+
+# Docker
+docker build -t uk-car-analyser .
+docker run -p 8501:8501 uk-car-analyser
 ```
 
 ## Source files
@@ -170,17 +194,17 @@ streamlit run app/streamlit_app.py
 | `src/bayesian_model.py` | PyMC Weibull Censored model, sequential warm-start |
 | `src/run_bayesian_batches.py` | Orchestrator: batches data, runs model, saves state |
 | `src/predict_bayes_weib.py` | Apply posterior to predict terminal mileage per vehicle |
-| `app/streamlit_app.py` | v1.0 frontend: registration lookup |
+| `Dockerfile` | Containerised deployment (Python 3.11-slim, uv, Streamlit) |
+| `app/streamlit_app.py` | Frontend: registration lookup, cost calculator, dataset overview |
 
 ## Planned work
 
 - [ ] Add credible intervals to prediction output
 - [ ] Interactive visualisation dashboard (Plotly)
-- [ ] **Used car value calculator** -- user inputs price, current mileage, and registration; app calculates mean/median/P75 remaining miles per pound and ranks against similar vehicles
 - [ ] **Used car listing ranking** -- scrape UK used car listings and rank them by mean/median/P75 remaining miles per pound
 - [ ] **Delta application pipeline** -- apply daily delta files to the combined dataset with a scheduled job (e.g., GitHub Actions or cron)
 - [ ] **Hierarchical pooling** -- add shared hyperpriors for make/model effects to shrink rare combos toward the global mean
 
 ## Tech stack
 
-Python 3.11 · DuckDB · PyMC · nutpie (NUTS sampler) · ArviZ · Pandas · PyArrow · Streamlit · Matplotlib · Plotly · Seaborn
+Python 3.11 · DuckDB · PyMC · nutpie (NUTS sampler) · ArviZ · Pandas · PyArrow · Streamlit · Matplotlib · Plotly · Seaborn · Docker
