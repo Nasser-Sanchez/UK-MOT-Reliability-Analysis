@@ -19,6 +19,7 @@ PREDICTION_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__
 
 def query_car(registration: str):
     """Look up a registration across all prediction parquet files."""
+    # DuckDB can glob parquet files directly
     pattern = os.path.join(PREDICTION_DIR, "batch_*.parquet")
     files = sorted(glob.glob(pattern))
     
@@ -50,10 +51,7 @@ def query_all_cars():
     if not files:
         return None
     
-    union_parts = " UNION ALL ".join(
-        f"SELECT *, '{f}' AS _source FROM read_parquet('{f}')"
-        for f in files
-    )
+    union_parts = " UNION ALL ".join(f"SELECT *, '{f}' AS _source FROM read_parquet('{f}')" for f in files)
     query = f"SELECT * FROM ({union_parts})"
     
     try:
@@ -128,6 +126,39 @@ if reg_input.strip():
             "P75 Remaining",
             f"{remaining_p75:,.0f} miles" if remaining_p75 > 0 else "N/A"
         )
+        
+        # Depreciation / cost-of-ownership calculator
+        st.subheader("Ownership Cost Calculator")
+        col_cost1, col_cost2 = st.columns(2)
+        car_price = col_cost1.number_input(
+            "Car Price (£)",
+            min_value=0,
+            step=500,
+            help="Enter the current market value of the car. Optional.",
+            key="car_price",
+        )
+        annual_mileage = col_cost2.number_input(
+            "Annual Mileage",
+            min_value=0,
+            step=500,
+            value=7000,
+            help="Estimated miles driven per year. Defaults to 7,000.",
+            key="annual_mileage",
+        )
+
+        if remaining_median > 0 and car_price > 0 and annual_mileage > 0:
+            years_remaining = remaining_median / annual_mileage
+            cost_per_year = car_price / years_remaining
+            cost_per_mile = car_price / remaining_median
+
+            col_d1, col_d2, col_d3 = st.columns(3)
+            col_d1.metric("Years Remaining", f"{years_remaining:.1f} years")
+            col_d2.metric("Cost Per Year", f"£{cost_per_year:,.0f}")
+            col_d3.metric("Cost Per Mile", f"{cost_per_mile:.2f} p/mile")
+        elif remaining_median > 0 and car_price > 0 and annual_mileage == 0:
+            st.caption("Enter a non-zero annual mileage to calculate costs.")
+        elif remaining_median > 0 and car_price == 0:
+            st.caption("Enter a car price above to calculate ownership costs.")
         
         # Visual bar for remaining life vs terminal
         if remaining_median > 0 and row.get("terminal_median", 0) > 0:
