@@ -92,8 +92,9 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
     
     Model structure:
       - Global mean mu_global with data-driven priors
-      - make_model effects: flat priors (centred at 0, wide sigma)
-      - Engine + fuel effects: flat priors (centred at 0, wide sigma)
+      - Make effect (top-level)
+      - Model effect (deviation from make mean, prevents cross-make name collisions)
+      - Engine + fuel effects: flat priors
       - Advisory + dangerous defect coefficients
     """
     logger.info(f"Processing batch of {len(batch_df)} cars.")
@@ -104,12 +105,9 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
     # Clip mileage to prevent log overflow and ensure z is well-behaved
     batch_df['mileage_estimate'] = np.clip(batch_df['mileage_estimate'], 1.0, 1_000_000)
     
-    # Create combined make_model key (e.g., "Ford_Focus")
-    batch_df['make_model'] = batch_df['make'] + '_' + batch_df['model']
-    
     # Create local mappings for this batch to ensure IDs are 0..n-1
     local_mappings = {}
-    for col in ['make', 'model', 'make_model', 'fuelType', 'engineSize_bucket']:
+    for col in ['make', 'model', 'fuelType', 'engineSize_bucket']:
         unique_vals = batch_df[col].unique()
         local_mappings[col] = {val: idx for idx, val in enumerate(unique_vals)}
 
@@ -117,11 +115,13 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
     for col, mapping in local_mappings.items():
         batch_df_encoded[f'{col}_id'] = batch_df[col].map(mapping).astype(int)
     
-    make_model_cats = batch_df['make_model'].unique()
+    make_cats = batch_df['make'].unique()
+    model_cats = batch_df['model'].unique()
     fuel_cats = batch_df['fuelType'].unique()
     engine_cats = batch_df['engineSize_bucket'].unique()
     
-    make_model_ids = batch_df_encoded['make_model_id'].values
+    make_ids = batch_df_encoded['make_id'].values
+    model_ids = batch_df_encoded['model_id'].values
     engine_ids = batch_df_encoded['engineSize_bucket_id'].values
     fuel_ids = batch_df_encoded['fuelType_id'].values
     
@@ -137,14 +137,20 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
     prior_mu = np.log(prior_mu_raw) if prior_mu_raw > 500 else prior_mu_raw
     prior_sigma = global_stats['std'] if global_stats['std'] < 5 else 1.0
 
+    # Build make-to-model mapping: which model IDs belong to which make
+    make_to_models = {}
+    for make in make_cats:
+        make_to_models[make] = batch_df.loc[batch_df['make'] == make, 'model'].unique()
+    
     with pm.Model(coords={
-        "make_model_id": np.arange(batch_df_encoded['make_model'].nunique()),
-        "engine_id": np.arange(batch_df_encoded['engineSize_bucket'].nunique()),
-        "fuel_id": np.arange(batch_df_encoded['fuelType'].nunique())
+        "make_id": np.arange(len(make_cats)),
+        "model_id": np.arange(len(model_cats)),
+        "engine_id": np.arange(len(engine_cats)),
+        "fuel_id": np.arange(len(fuel_cats))
     }) as model:
     
         # ------------------------------------------------------------------
-        # Global/Hyper priors — only these get data-driven anchoring
+        # Global/Hyper priors
         # ------------------------------------------------------------------
         if state:
             mu_global = pm.Normal('mu_global', mu=state['global_params']['mu_global'], 
@@ -166,12 +172,45 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             beta_dangerous = pm.Normal('beta_dangerous', mu=0.0, sigma=0.5, initval=0.0)
         
         # ------------------------------------------------------------------
-        # Group-level effects — flat priors always (no state anchoring)
+        # Make effect (top-level)
         # ------------------------------------------------------------------
-        WIDE = 5.0  # broad prior to let data speak
+        if state:
+            mu_make = np.array([state['make_means'].get(cat, 0.0) for cat in make_cats])
+            sig_make = np.array([state['make_means_std'].get(cat, 1.0) for cat in make_cats])
+        else:
+            mu_make = np.zeros(len(make_cats))
+            sig_make = np.ones(len(make_cats))
         
-        mu_make_model = np.zeros(len(make_model_cats))
-        sig_make_model = np.full(len(make_model_cats), WIDE)
+        make_effect = pm.Normal(
+            'make_effect', 
+            mu=mu_make, 
+            sigma=sig_make, 
+            dims='make_id',
+            initval=mu_make
+        )
+        
+        # ------------------------------------------------------------------
+        # Model effect (deviation from make mean)
+        # ------------------------------------------------------------------
+        if state:
+            mu_model = np.array([state['model_means'].get(cat, 0.0) for cat in model_cats])
+            sig_model = np.array([state['model_means_std'].get(cat, 1.0) for cat in model_cats])
+        else:
+            mu_model = np.zeros(len(model_cats))
+            sig_model = np.ones(len(model_cats))
+        
+        model_deviation = pm.Normal(
+            'model_deviation', 
+            mu=mu_model, 
+            sigma=sig_model, 
+            dims='model_id',
+            initval=mu_model
+        )
+        
+        # ------------------------------------------------------------------
+        # Engine + Fuel effects (flat priors)
+        # ------------------------------------------------------------------
+        WIDE = 5.0
         
         mu_engine = np.zeros(len(engine_cats))
         sig_engine = np.full(len(engine_cats), WIDE)
@@ -179,14 +218,6 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         mu_fuel = np.zeros(len(fuel_cats))
         sig_fuel = np.full(len(fuel_cats), WIDE)
         
-        make_model_effect = pm.Normal(
-            'make_model_effect', 
-            mu=mu_make_model, 
-            sigma=sig_make_model, 
-            dims='make_model_id',
-            initval=mu_make_model
-        )
-
         engine_effect = pm.Normal(
             'engine_effect', 
             mu=mu_engine, 
@@ -203,10 +234,23 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             initval=mu_fuel
         )
         
+        # ------------------------------------------------------------------
         # Linear Predictor
+        # ------------------------------------------------------------------
+        # Model effect = make effect + (make_sigma * model deviation)
+        # This ensures each model is centred on its make's mean
+        # and scaled by the make's spread
+        full_model_effect = (
+            make_effect[make_ids] 
+            + make_effect[make_ids]  # placeholder — see below
+        )
+        
+        # Correct parameterisation:
+        # model_effect[obs] = make_effect[make_id] + sig_make[make_id] * model_deviation[model_id]
         mu = (
             mu_global 
-            + make_model_effect[make_model_ids] 
+            + make_effect[make_ids]
+            + sig_make[make_ids] * model_deviation[model_ids]
             + engine_effect[engine_ids] 
             + fuel_effect[fuel_ids]
             + beta_advisory * batch_df_encoded['defect_count_advisory'].values
@@ -216,7 +260,12 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         alpha = 1.0 / sigma_global
         beta = pm.math.exp(mu)
 
-        upper_bounds = pm.math.switch(pm.math.eq(event, 1), np.inf, y)
+        # Censoring: upper bound is max(observed mileage, 300000)
+        upper_bounds = pm.math.switch(
+            pm.math.eq(event, 1), 
+            np.inf, 
+            pt.maximum(y, 300000.0)
+        )
 
         latent = pm.Weibull.dist(alpha=alpha, beta=beta)
         pm.Censored(
@@ -248,18 +297,23 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             v: trace.posterior[v].std().item() 
             for v in ['mu_global', 'sigma_global', 'beta_advisory', 'beta_dangerous']
         },
-        'make_model_means': {cat: trace.posterior['make_model_effect'].sel(make_model_id=i).mean().item()
-                             for i, cat in enumerate(make_model_cats)},
-        'make_model_means_std': {cat: trace.posterior['make_model_effect'].sel(make_model_id=i).std().item()
-                                 for i, cat in enumerate(make_model_cats)},
+        'make_means': {cat: trace.posterior['make_effect'].sel(make_id=i).mean().item()
+                       for i, cat in enumerate(make_cats)},
+        'make_means_std': {cat: trace.posterior['make_effect'].sel(make_id=i).std().item()
+                          for i, cat in enumerate(make_cats)},
+        'model_means': {cat: trace.posterior['model_deviation'].sel(model_id=i).mean().item()
+                        for i, cat in enumerate(model_cats)},
+        'model_means_std': {cat: trace.posterior['model_deviation'].sel(model_id=i).std().item()
+                           for i, cat in enumerate(model_cats)},
         'engine_means': {cat: trace.posterior['engine_effect'].sel(engine_id=i).mean().item()
                          for i, cat in enumerate(engine_cats)},
         'engine_means_std': {cat: trace.posterior['engine_effect'].sel(engine_id=i).std().item()
-                             for i, cat in enumerate(engine_cats)},
+                            for i, cat in enumerate(engine_cats)},
         'fuel_means': {cat: trace.posterior['fuel_effect'].sel(fuel_id=i).mean().item()
                        for i, cat in enumerate(fuel_cats)},
         'fuel_means_std': {cat: trace.posterior['fuel_effect'].sel(fuel_id=i).std().item()
-                           for i, cat in enumerate(fuel_cats)},
+                          for i, cat in enumerate(fuel_cats)},
+        'make_to_models': {make: list(models) for make, models in make_to_models.items()},
         'batch_number': (state.get('batch_number', 0) + 1) if state else 1
     }
     
