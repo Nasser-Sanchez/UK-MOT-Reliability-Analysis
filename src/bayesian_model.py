@@ -91,9 +91,9 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
     Run the hierarchical Weibull model on a batch of data.
     
     Model structure:
-      - Global mean mu_global
-      - make_model effects: centred on Make-level stats (mean/std)
-      - Engine + fuel effects: flat priors (data-driven)
+      - Global mean mu_global with data-driven priors
+      - make_model effects: flat priors (centred at 0, wide sigma)
+      - Engine + fuel effects: flat priors (centred at 0, wide sigma)
       - Advisory + dangerous defect coefficients
     """
     logger.info(f"Processing batch of {len(batch_df)} cars.")
@@ -105,7 +105,6 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
     batch_df['mileage_estimate'] = np.clip(batch_df['mileage_estimate'], 1.0, 1_000_000)
     
     # Create combined make_model key (e.g., "Ford_Focus")
-    # We use the 'make' column directly to ensure we have the correct anchor
     batch_df['make_model'] = batch_df['make'] + '_' + batch_df['model']
     
     # Create local mappings for this batch to ensure IDs are 0..n-1
@@ -114,17 +113,14 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         unique_vals = batch_df[col].unique()
         local_mappings[col] = {val: idx for idx, val in enumerate(unique_vals)}
 
-    # Encode using local mappings
     batch_df_encoded = batch_df.copy()
     for col, mapping in local_mappings.items():
         batch_df_encoded[f'{col}_id'] = batch_df[col].map(mapping).astype(int)
     
-    # We need to preserve category names for prior lookup
     make_model_cats = batch_df['make_model'].unique()
     fuel_cats = batch_df['fuelType'].unique()
     engine_cats = batch_df['engineSize_bucket'].unique()
     
-    # 2. Extract Data
     make_model_ids = batch_df_encoded['make_model_id'].values
     engine_ids = batch_df_encoded['engineSize_bucket_id'].values
     fuel_ids = batch_df_encoded['fuelType_id'].values
@@ -132,14 +128,11 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
     y = batch_df['mileage_estimate'].values.astype(np.float64)
     event = batch_df_encoded['event_interval'].values
     
-    # 3. Define Priors
+    # 2. Load global stats for hyperpriors only
     with open(STATS_PATH, 'r') as f:
         stats = json.load(f)
-    
-    # Use global stats for the main hyperparameters
     global_stats = stats['global']
     
-    # Use log-mean and log-std directly from mileage_stats.json
     prior_mu_raw = global_stats['mean']
     prior_mu = np.log(prior_mu_raw) if prior_mu_raw > 500 else prior_mu_raw
     prior_sigma = global_stats['std'] if global_stats['std'] < 5 else 1.0
@@ -150,7 +143,9 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         "fuel_id": np.arange(batch_df_encoded['fuelType'].nunique())
     }) as model:
     
-        # Global/Hyper priors
+        # ------------------------------------------------------------------
+        # Global/Hyper priors — only these get data-driven anchoring
+        # ------------------------------------------------------------------
         if state:
             mu_global = pm.Normal('mu_global', mu=state['global_params']['mu_global'], 
                                 sigma=state['global_params_std']['mu_global'] / 2,
@@ -164,36 +159,26 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             beta_dangerous = pm.Normal('beta_dangerous', mu=state['global_params'].get('beta_dangerous', 0.0), 
                                     sigma=state['global_params_std'].get('beta_dangerous', 1.0),
                                     initval=state['global_params'].get('beta_dangerous', 0.0))
-                                    
-            mu_make_model = np.array([state['make_model_means'].get(cat, 0.0) for cat in make_model_cats])
-            sig_make_model = np.array([state['make_model_means_std'].get(cat, 1.0) for cat in make_model_cats])
-            
-            mu_engine = np.array([state['engine_means'].get(cat, 0.0) for cat in engine_cats])
-            sig_engine = np.array([state['engine_means_std'].get(cat, 1.0) for cat in engine_cats])
-            
-            mu_fuel = np.array([state['fuel_means'].get(cat, 0.0) for cat in fuel_cats])
-            sig_fuel = np.array([state['fuel_means_std'].get(cat, 1.0) for cat in fuel_cats])
         else:
             mu_global = pm.Normal('mu_global', mu=prior_mu, sigma=0.5, initval=prior_mu)
-            sigma_global = pm.HalfNormal('sigma_global', sigma=prior_sigma, initval=1.0) 
-            
+            sigma_global = pm.HalfNormal('sigma_global', sigma=prior_sigma, initval=1.0)
             beta_advisory = pm.Normal('beta_advisory', mu=0.0, sigma=0.5, initval=0.0)
             beta_dangerous = pm.Normal('beta_dangerous', mu=0.0, sigma=0.5, initval=0.0)
-            
-            mu_make_model = np.zeros(len(make_model_cats))
-            sig_make_model = np.ones(len(make_model_cats))
-            mu_engine = np.zeros(len(engine_cats))
-            sig_engine = np.ones(len(engine_cats))
-            mu_fuel = np.zeros(len(fuel_cats))
-            sig_fuel = np.ones(len(fuel_cats))
         
         # ------------------------------------------------------------------
-        # make_model Effects: Anchored by Make-level stats
+        # Group-level effects — flat priors always (no state anchoring)
         # ------------------------------------------------------------------
+        WIDE = 5.0  # broad prior to let data speak
         
-        # 3. Define the effect
-        # The 'mu' anchors the specific model to its Make's average
-        # The 'sigma' anchors the uncertainty to the Make's spread
+        mu_make_model = np.zeros(len(make_model_cats))
+        sig_make_model = np.full(len(make_model_cats), WIDE)
+        
+        mu_engine = np.zeros(len(engine_cats))
+        sig_engine = np.full(len(engine_cats), WIDE)
+        
+        mu_fuel = np.zeros(len(fuel_cats))
+        sig_fuel = np.full(len(fuel_cats), WIDE)
+        
         make_model_effect = pm.Normal(
             'make_model_effect', 
             mu=mu_make_model, 
@@ -202,7 +187,6 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             initval=mu_make_model
         )
 
-        # Using wide flat priors allows the data to drive these effects.
         engine_effect = pm.Normal(
             'engine_effect', 
             mu=mu_engine, 
@@ -243,8 +227,6 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             observed=y
         )
 
-        # 4. Sampling
-
         trace = pm.sample(
             draws=1000,
             tune=1000,
@@ -252,37 +234,10 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             random_seed=123,
             nuts_sampler="nutpie"
         )
-        
-        # # ADVI inference 
-        # logger.info("Running ADVI fit...")
-        # fit = pm.fit(
-        #     n=15000,
-        #     method="advi",
-        #     random_seed=123,
-        #     callbacks=[pm.callbacks.CheckParametersConvergence(diff="absolute")]
-        # )
-        
-        # # Draw samples from the variational distribution
-        # # 3. Draw samples from the learned flow
-        # n_draws = 5000
-        # logger.info(f"Drawing {n_draws} posterior samples from flow...")
-        # trace = fit.sample(n_draws)
-
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(fit.hist[-3000:], label='ELBO')
-    # plt.title('ADVI ELBO History')
-    # plt.xlabel('Iteration')
-    # plt.ylabel('ELBO')
-    # plt.legend()
-    # plt.grid(True)
-    # plt.savefig('data/elbo_history.png')
-    # plt.close()
-    # logger.info("ELBO history saved to 'elbo_history.png'")
 
     diagnostics = {
-         'batch_size': len(batch_df)
-    #     'elbo_final': float(fit.hist[-1]),
-     }
+        'batch_size': len(batch_df)
+    }
     
     new_state = {
         'global_params': {
