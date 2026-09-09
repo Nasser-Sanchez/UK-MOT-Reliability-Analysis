@@ -55,20 +55,13 @@ def load_processed_registrations():
         return set(pd.read_csv(REGISTRATIONS_PATH)['registration'].tolist())
     return set()
 
-def save_state(state, diagnostics, trace):
-    """Save model state, diagnostics, and full trace."""
+def save_state(state, trace):
+    """Save model state and full trace."""
     # 1. Save JSON State
     with open(STATE_PATH, 'w') as f:
         json.dump(state, f, indent=2)
-    
-    # 2. Append Diagnostics
-    df_diag = pd.DataFrame([diagnostics])
-    if os.path.exists(DIAGNOSTICS_PATH):
-        df_diag.to_csv(DIAGNOSTICS_PATH, mode='a', header=False, index=False)
-    else:
-        df_diag.to_csv(DIAGNOSTICS_PATH, mode='w', header=True, index=False)
         
-    # 3. Save Full Trace for Prediction (Arviz NetCDF format)
+    # 2. Save Full Trace for Prediction (Arviz NetCDF format)
     trace.to_netcdf("data/model_trace_latest.nc")
 
 
@@ -284,9 +277,6 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             nuts_sampler="nutpie"
         )
 
-    diagnostics = {
-        'batch_size': len(batch_df)
-    }
     
     new_state = {
         'global_params': {
@@ -317,4 +307,4 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         'batch_number': (state.get('batch_number', 0) + 1) if state else 1
     }
     
-    return trace, new_state, diagnostics
+    return trace, new_state
