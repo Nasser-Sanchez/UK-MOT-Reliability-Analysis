@@ -190,7 +190,7 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             # ------------------------------------------------------------------
             # Engine + Fuel effects (flat priors)
             # ------------------------------------------------------------------
-            WIDE = 5.0
+            WIDE = 0.5
             
             if state and 'engine_means' in state:
                 mu_engine = np.array([state['engine_means'].get(cat, 0.0) for cat in engine_cats])
@@ -261,13 +261,57 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
                 observed=y
             )
 
-            trace = pm.sample(
-                draws=1000,
-                tune=1000,
-                cores=4,
-                random_seed=123,
-                nuts_sampler="nutpie"
-            )
+            # ------------------------------------------------------------------
+        # Prior Predictive Check (Optional)
+        # ------------------------------------------------------------------
+        # 1. Define the variable to sample
+            terminal_mileage = pm.Weibull('terminal_mileage', alpha=alpha, beta=beta)
+
+            # 2. Prior Predictive Check Logic
+            import os
+            ppc_dir = "data/prior_predictive_checks"
+            os.makedirs(ppc_dir, exist_ok=True)
+            
+            run_ppc = input("Run Prior Predictive Check? (y/n): ").strip().lower()
+            proceed_mcmc = True
+
+            if run_ppc == 'y':
+                print("Running Prior Predictive Check...")
+                # Explicitly request both mu_global and terminal_mileage
+                prior_trace = pm.sample_prior_predictive(samples=1000, random_seed=123, var_names=['mu_global', 'terminal_mileage'])
+                
+                import matplotlib.pyplot as plt
+                import arviz as az
+                
+                # Plot mu (from prior group)
+                az.plot_posterior(prior_trace.prior['mu_global'], ref_val=0)
+                plt.title("Prior Distribution of mu_global")
+                plt.savefig(os.path.join(ppc_dir, "prior_mu_global.png"))
+                plt.close()
+                
+                # Plot terminal mileage (from prior group because it's a stochastic variable)
+                az.plot_posterior(prior_trace.prior['terminal_mileage'], ref_val=150000)
+                plt.title("Prior Predictive Distribution of Terminal Mileage")
+                plt.savefig(os.path.join(ppc_dir, "prior_terminal_mileage.png"))
+                plt.close()
+                
+                print(f"Prior predictive checks saved to {ppc_dir}/")
+                proceed_mcmc = input("Proceed with MCMC sampling? (y/n): ").strip().lower() == 'y'
+            else:
+                print("Skipping Prior Predictive Check.")
+
+            # 3. MCMC Sampling
+            if proceed_mcmc:
+                trace = pm.sample(
+                    draws=1000,
+                    tune=1000,
+                    cores=4,
+                    random_seed=123,
+                    nuts_sampler="nutpie"
+                )
+            else:
+                print("MCMC sampling cancelled by user.")
+                return None, None
         
         # ------------------------------------------------------------------
         # Save State (Updated keys to use make_model)
