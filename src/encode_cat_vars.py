@@ -10,7 +10,6 @@ def compute_and_save_mappings(data_path="data/mot_last_test.parquet", output_dir
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    # Original columns
     cols = ['make', 'model', 'fuelType', 'engineSize_bucket']
     
     # Check if all mapping files already exist
@@ -18,8 +17,6 @@ def compute_and_save_mappings(data_path="data/mot_last_test.parquet", output_dir
         os.path.exists(f"{output_dir}/{col}_mapping.csv") 
         for col in cols
     )
-    
-    # Check if make_model mapping exists
     make_model_exists = os.path.exists(f"{output_dir}/make_model_mapping.csv")
     
     if all_exist and make_model_exists:
@@ -28,33 +25,39 @@ def compute_and_save_mappings(data_path="data/mot_last_test.parquet", output_dir
     
     print("Computing category mappings using SQL...")
     
-    # Use DuckDB to get distinct values without loading full dataset
-    query = f"""
-    SELECT DISTINCT make, model, fuelType, engineSize_bucket
-    FROM '{data_path}'
-    """
-    
-    df = duckdb.query(query).df()
+    # Try to select make_model. If it fails, fall back to constructing it.
+    try:
+        query = f"""
+        SELECT DISTINCT make, model, fuelType, engineSize_bucket, make_model
+        FROM '{data_path}'
+        """
+        df = duckdb.query(query).df()
+        use_existing_make_model = True
+    except Exception:
+        query = f"""
+        SELECT DISTINCT make, model, fuelType, engineSize_bucket
+        FROM '{data_path}'
+        """
+        df = duckdb.query(query).df()
+        use_existing_make_model = False
     
     mappings = {}
     
     # 1. Standard Mappings
     for col in cols:
-        # Get unique values and sort them for consistency
         unique_vals = sorted(df[col].dropna().unique())
-        
-        # Create mapping: value -> index
         mapping = {val: idx for idx, val in enumerate(unique_vals)}
         mappings[col] = mapping
         
-        # Save to CSV
         df_map = pd.DataFrame(list(mapping.items()), columns=['category', 'id'])
         df_map.to_csv(f"{output_dir}/{col}_mapping.csv", index=False)
         
     # 2. Combined make_model Mapping
-    # Create a combined key to avoid ambiguity (e.g., "Focus" could be Ford or Mazda)
-    df['make_model'] = df['make'].astype(str) + '_' + df['model'].astype(str)
-    unique_make_models = sorted(df['make_model'].dropna().unique())
+    if use_existing_make_model:
+        unique_make_models = sorted(df['make_model'].dropna().unique())
+    else:
+        df['make_model'] = df['make'].astype(str) + '_' + df['model'].astype(str)
+        unique_make_models = sorted(df['make_model'].dropna().unique())
     
     make_model_mapping = {val: idx for idx, val in enumerate(unique_make_models)}
     mappings['make_model'] = make_model_mapping
@@ -64,6 +67,7 @@ def compute_and_save_mappings(data_path="data/mot_last_test.parquet", output_dir
     
     print(f"Mappings saved to {output_dir}/")
     return mappings
+
 
 def load_mappings(output_dir="data"):
     """
