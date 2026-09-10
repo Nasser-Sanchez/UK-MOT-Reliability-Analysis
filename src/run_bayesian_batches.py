@@ -40,7 +40,6 @@ def main(batch_size: int, num_batches: int):
     )
     SELECT
         registration, make, model, fuelType, engineSize_bucket,
-        defect_count_advisory, defect_count_dangerous,
         mileage_estimate, event_interval
     FROM 'data/mot_last_test.parquet'
     WHERE make IN (SELECT make FROM valid_makes)
@@ -94,14 +93,14 @@ def main(batch_size: int, num_batches: int):
             
         # Run Model
         #try:
-        trace, new_state, diagnostics = run_streaming_batch(batch_df, state)
+        trace, new_state = run_streaming_batch(batch_df, state)
         
         # Update State & Registrations
         state = new_state
         processed_regs.update(batch_df['registration'].tolist())
         
-        # Save State, Diagnostics, and Trace
-        save_state(state, diagnostics, trace)
+        # Save State and Trace
+        save_state(state, trace)
         
         # Save registrations
         pd.DataFrame({'registration': list(processed_regs)}).to_csv(REGISTRATIONS_PATH, index=False)
