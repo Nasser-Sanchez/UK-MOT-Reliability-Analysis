@@ -91,7 +91,7 @@ if reg_input.strip():
         col1.metric("Make", row.get("make", "N/A"))
         col2.metric("Model", row.get("model", "N/A"))
         col3.metric("Fuel Type", row.get("fuelType", "N/A"))
-        col4.metric("Engine Size", row.get("engineSize_bucket", "N/A"))
+        col4.metric("Engine Size", row.get("engineSize", "N/A"))
         
         # Current status
         st.subheader("Current Status")
