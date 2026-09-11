@@ -256,7 +256,7 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
                 'likelihood', 
                 dist=latent, 
                 lower=None, 
-                upper=upper_bounds, # changed to inf rather than upper bounds 
+                upper=np.inf, # changed to inf rather than upper bounds 
                 observed=y
             )
 
@@ -267,7 +267,6 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             terminal_mileage = pm.Weibull('terminal_mileage', alpha=alpha, beta=beta)
 
             # 2. Prior Predictive Check Logic
-            import os
             ppc_dir = "data/prior_predictive_checks"
             os.makedirs(ppc_dir, exist_ok=True)
             
@@ -316,40 +315,56 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             # Posterior Predictive Check (Optional)
             # ------------------------------------------------------------------
             run_ppc = input("Run Posterior Predictive Check? (y/n): ").strip().lower()
-            
+        
             if run_ppc == 'y':
                 print("Running Posterior Predictive Check...")
+                
+                # Sample terminal mileage predictions
                 ppc_trace = pm.sample_posterior_predictive(trace, var_names=['y_pred'], random_seed=123)
+                
                 
                 ppc_dir = "data/posterior_predictive_checks"
                 os.makedirs(ppc_dir, exist_ok=True)
                 
-                # Plot 1: Observed vs Predicted Distribution
-                #plt.figure(figsize=(8, 5))
-                plt.hist(y, bins=50, alpha=0.5, label='Observed Mileage', color='blue')
-                plt.hist(ppc_trace.posterior_predictive['y_pred'].values.flatten(), bins=50, alpha=0.5, label='Predicted Mileage', color='red')
-                batch_num = state.get('batch_number', 0) + 1 if state else 1
-                plt.title(f"Posterior Predictive Check (Batch {batch_num})")
-                plt.xlabel("Mileage")
-                plt.ylabel("Frequency")
-                plt.legend()
-                plt.savefig(os.path.join(ppc_dir, "posterior_predictive_fit.png"))
-                plt.close()
+                # Filter for cars that have actually failed (event=1)
+                failed_mask = batch_df_encoded['event_interval'].values == 1
                 
-                # Plot 2: Residuals (Observed - Predicted)
-                mean_pred = ppc_trace.posterior_predictive['y_pred'].mean(dim=['chain', 'draw']).values
-                residuals = y - mean_pred
+                # Get observed terminal mileage for failed cars
+                observed_terminal = batch_df['mileage_estimate'].values[failed_mask]
                 
-                plt.figure(figsize=(8, 5))
-                plt.hist(residuals, bins=50, color='green', edgecolor='black')
-                plt.title("Residuals (Observed - Predicted)")
-                plt.xlabel("Residual")
-                plt.ylabel("Frequency")
-                plt.axvline(0, color='black', linestyle='--')
-                plt.savefig(os.path.join(ppc_dir, "residuals.png"))
-                plt.close()
+                # Get mean predicted terminal mileage for ALL cars, then filter
+                mean_pred_all = ppc_trace.posterior_predictive['y_pred'].mean(dim=['chain', 'draw']).values
+                mean_pred_failed = mean_pred_all[failed_mask] # Apply same mask
                 
-                print(f"Posterior predictive checks saved to {ppc_dir}/")
+                if len(observed_terminal) > 0:
+                    # Plot 1: Observed vs Predicted for FAILED cars only
+                    plt.figure(figsize=(8, 5))
+                    plt.hist(observed_terminal, bins=50, alpha=0.5, label='Observed Terminal Mileage', color='blue')
+                    plt.hist(mean_pred_failed, bins=50, alpha=0.5, label='Predicted Terminal Mileage', color='red')
+                    
+                    batch_num = state.get('batch_number', 0) + 1 if state else 1
+                    plt.title(f"PPC: Observed vs Predicted (Failed Cars Only)")
+                    plt.xlabel("Mileage")
+                    plt.ylabel("Frequency")
+                    plt.legend()
+                    plt.savefig(os.path.join(ppc_dir, "ppc_failed_cars.png"))
+                    plt.close()
+                    
+                    # Plot 2: Residuals for Failed Cars
+                    residuals = observed_terminal - mean_pred_failed
+                    
+                    plt.figure(figsize=(8, 5))
+                    plt.hist(residuals, bins=50, color='green', edgecolor='black')
+                    plt.title("Residuals (Observed - Predicted) for Failed Cars")
+                    plt.xlabel("Residual")
+                    plt.ylabel("Frequency")
+                    plt.axvline(0, color='black', linestyle='--')
+                    plt.savefig(os.path.join(ppc_dir, "residuals_failed_cars.png"))
+                    plt.close()
+                    
+                    print(f"Posterior predictive checks saved to {ppc_dir}/")
+                else:
+                    print("No failed cars found in this batch for PPC.")
             else:
                 print("Skipping Posterior Predictive Check.")
 
