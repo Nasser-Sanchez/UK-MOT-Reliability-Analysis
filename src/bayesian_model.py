@@ -123,9 +123,8 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             stats = json.load(f)
         global_stats = stats['global']
         
-        prior_mu_raw = global_stats['mean']
-        prior_mu = np.log(prior_mu_raw) if prior_mu_raw > 500 else prior_mu_raw
-        prior_sigma = global_stats['std'] if global_stats['std'] < 5 else 1.0
+        prior_mu = global_stats['log_mean']
+        prior_sigma = global_stats['sigma_global_prior'] 
 
         # --- UPDATED COORDS: Added make_model_id ---
         with pm.Model(coords={
@@ -147,7 +146,7 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
                                              initval=state['global_params']['sigma_global'])
 
             else:
-                mu_global = pm.Normal('mu_global', mu=prior_mu, sigma=0.1, initval=prior_mu)
+                mu_global = pm.Normal('mu_global', mu=prior_mu, sigma=prior_sigma, initval=prior_mu)
                 sigma_global = pm.HalfNormal('sigma_global', sigma=prior_sigma, initval=1.0)
                 
             
@@ -188,9 +187,9 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             )
             
             # ------------------------------------------------------------------
-            # Engine + Fuel effects (flat priors)
+            # Engine + Fuel effects
             # ------------------------------------------------------------------
-            WIDE = 0.2
+            WIDE = 0.1
             
             if state and 'engine_means' in state:
                 mu_engine = np.array([state['engine_means'].get(cat, 0.0) for cat in engine_cats])
@@ -248,15 +247,16 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             upper_bounds = pm.math.switch(
                 pm.math.eq(event, 1), 
                 np.inf, 
-                pt.maximum(y*2,300000)
+                y
             )
 
             latent = pm.Weibull.dist(alpha=alpha, beta=beta)
+
             pm.Censored(
                 'likelihood', 
                 dist=latent, 
                 lower=None, 
-                upper=np.inf, # changed to inf rather than upper bounds 
+                upper=upper_bounds, 
                 observed=y
             )
 
