@@ -1,0 +1,64 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+*.egg
+
+# Virtual environments
+.venv
+venv
+env
+
+# Data files (mounted via volume, not baked into image)
+data/
+*.parquet
+*.nc
+*.json
+*.csv
+*.log
+
+# Notebooks
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+docs/
+
+# Deprecated
+src/deprecated/
+
+# Pixi
+pixi.lock
+pixi.toml
+
+# UV
+uv.lock
+
+# DuckDB temp
+*.duckdb.tmp/
+*.duckdb
+
+# Logs
+*.log

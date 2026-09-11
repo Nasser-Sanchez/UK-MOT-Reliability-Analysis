@@ -12,6 +12,13 @@ con.execute("""
             GROUP BY make
             HAVING COUNT(*) > 20
         ),
+
+        p90_by_make AS (
+            SELECT make,
+                   quantile_cont(mileage, 0.9) AS p_90_mileage_make
+            FROM read_parquet('data/mot_data_combined.parquet')
+            GROUP BY make
+        ),
         
         valid_models AS (
             SELECT model
@@ -30,7 +37,7 @@ con.execute("""
             ) AS interval_censored,
             IF(
                 interval_censored=1,
-                mileage+(mileage/years),
+                mileage+((mileage/years))/2,
                 mileage
             ) AS mileage_estimate,
             IF(
@@ -39,7 +46,7 @@ con.execute("""
                 years
             ) AS years_estimate,
             
-           make, model, 
+           d.make, model, 
            fuelType, engineSize,
         CASE
             WHEN engineSize = 0 OR engineSize IS NULL THEN 'Electric'
@@ -52,16 +59,19 @@ con.execute("""
            SUM(defect_count_advisory)OVER(PARTITION BY registration) AS defect_count_advisory,
            SUM(defect_count_dangerous)OVER(PARTITION BY registration) AS defect_count_dangerous,
            last_test,
-           IF(interval_censored=1, 1, event) AS event_interval
+           IF(interval_censored=1, 1, event) AS event_interval,
+           p.p_90_mileage_make
            
            FROM read_parquet('data/mot_data_combined.parquet') d
            JOIN max_date m ON 1=1
+           JOIN p90_by_make p ON d.make=p.make
            
            
         )
     
-        SELECT registration, make, model, fuelType, engineSize, engineSize_bucket, defect_count_advisory, defect_count_dangerous,
-        years, mileage, event, years_estimate, mileage_estimate, event_interval
+        SELECT registration, make, model, CONCAT(make,'_',model) AS make_model, fuelType, engineSize, engineSize_bucket, 
+        defect_count_advisory, defect_count_dangerous,
+        years, mileage, event, years_estimate, mileage_estimate, event_interval, p_90_mileage_make
         FROM last_test_prep 
         WHERE last_test=1 AND mileage_estimate<3000000 
         AND NOT isinf(mileage_estimate) 
