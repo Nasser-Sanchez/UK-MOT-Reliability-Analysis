@@ -190,7 +190,7 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             # ------------------------------------------------------------------
             # Engine + Fuel effects (flat priors)
             # ------------------------------------------------------------------
-            WIDE = 0.5
+            WIDE = 0.2
             
             if state and 'engine_means' in state:
                 mu_engine = np.array([state['engine_means'].get(cat, 0.0) for cat in engine_cats])
@@ -249,7 +249,6 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
                 pm.math.eq(event, 1), 
                 np.inf, 
                 pt.maximum(y*2,300000)
-                #pt.maximum(y, p90)
             )
 
             latent = pm.Weibull.dist(alpha=alpha, beta=beta)
@@ -280,8 +279,6 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
                 # Explicitly request both mu_global and terminal_mileage
                 prior_trace = pm.sample_prior_predictive(samples=1000, random_seed=123, var_names=['mu_global', 'terminal_mileage'])
                 
-                import matplotlib.pyplot as plt
-                import arviz as az
                 
                 # Plot mu (from prior group)
                 az.plot_posterior(prior_trace.prior['mu_global'], ref_val=0)
@@ -300,6 +297,7 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             else:
                 print("Skipping Prior Predictive Check.")
 
+            y_pred = pm.Weibull('y_pred', alpha=alpha, beta=beta, shape=len(y))
             # 3. MCMC Sampling
             if proceed_mcmc:
                 trace = pm.sample(
@@ -312,7 +310,49 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             else:
                 print("MCMC sampling cancelled by user.")
                 return None, None
-        
+
+            
+             # ------------------------------------------------------------------
+            # Posterior Predictive Check (Optional)
+            # ------------------------------------------------------------------
+            run_ppc = input("Run Posterior Predictive Check? (y/n): ").strip().lower()
+            
+            if run_ppc == 'y':
+                print("Running Posterior Predictive Check...")
+                ppc_trace = pm.sample_posterior_predictive(trace, var_names=['y_pred'], random_seed=123)
+                
+                ppc_dir = "data/posterior_predictive_checks"
+                os.makedirs(ppc_dir, exist_ok=True)
+                
+                # Plot 1: Observed vs Predicted Distribution
+                #plt.figure(figsize=(8, 5))
+                plt.hist(y, bins=50, alpha=0.5, label='Observed Mileage', color='blue')
+                plt.hist(ppc_trace.posterior_predictive['y_pred'].values.flatten(), bins=50, alpha=0.5, label='Predicted Mileage', color='red')
+                batch_num = state.get('batch_number', 0) + 1 if state else 1
+                plt.title(f"Posterior Predictive Check (Batch {batch_num})")
+                plt.xlabel("Mileage")
+                plt.ylabel("Frequency")
+                plt.legend()
+                plt.savefig(os.path.join(ppc_dir, "posterior_predictive_fit.png"))
+                plt.close()
+                
+                # Plot 2: Residuals (Observed - Predicted)
+                mean_pred = ppc_trace.posterior_predictive['y_pred'].mean(dim=['chain', 'draw']).values
+                residuals = y - mean_pred
+                
+                plt.figure(figsize=(8, 5))
+                plt.hist(residuals, bins=50, color='green', edgecolor='black')
+                plt.title("Residuals (Observed - Predicted)")
+                plt.xlabel("Residual")
+                plt.ylabel("Frequency")
+                plt.axvline(0, color='black', linestyle='--')
+                plt.savefig(os.path.join(ppc_dir, "residuals.png"))
+                plt.close()
+                
+                print(f"Posterior predictive checks saved to {ppc_dir}/")
+            else:
+                print("Skipping Posterior Predictive Check.")
+
         # ------------------------------------------------------------------
         # Save State (Updated keys to use make_model)
         # ------------------------------------------------------------------
