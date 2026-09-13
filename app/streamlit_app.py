@@ -5,6 +5,7 @@ Streamlit frontend for querying terminal mileage predictions.
 
 import streamlit as st
 import duckdb
+import pandas as pd
 import os
 import glob
 
@@ -87,11 +88,23 @@ if reg_input.strip():
         
         # Car details
         st.subheader("Vehicle Details")
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Make", row.get("make", "N/A"))
         col2.metric("Model", row.get("model", "N/A"))
         col3.metric("Fuel Type", row.get("fuelType", "N/A"))
         col4.metric("Engine Size", row.get("engineSize", "N/A"))
+        
+        # Handle the date safely
+        first_used = row.get("firstUsedDate")
+        if pd.isna(first_used):
+            first_used = "N/A"
+        else:
+            # Convert Timestamp to "YYYY-MM-DD" string
+            first_used = str(first_used.date())
+            
+        # Use text() instead of metric() for non-numeric values
+        col5.text("First Used")
+        col5.text(first_used)
         
         # Current status
         st.subheader("Current Status")
@@ -102,11 +115,16 @@ if reg_input.strip():
         
         # Terminal mileage predictions
         st.subheader("Terminal Mileage Prediction")
-        col8, col9, col10 = st.columns(3)
-        col8.metric("Median Terminal", f"{row.get('terminal_median', 0):,.0f} miles")
-        col9.metric("Mean Terminal", f"{row.get('terminal_mean', 0):,.0f} miles")
-        col10.metric("P75 Terminal", f"{row.get('terminal_p75', 0):,.0f} miles")
+        col8, col9 = st.columns(2)
         
+        col8.metric("Median Terminal", f"{row.get('terminal_median', 0):,.0f} miles")
+        
+        mean_val = row.get('terminal_mean', 0)
+        ci_lower = row.get('terminal_ci_lower', 0)
+        ci_upper = row.get('terminal_ci_upper', 0)
+        
+        col9.metric("Mean Terminal", f"{mean_val:,.0f} miles")
+        col9.caption(f"95% CI: {ci_lower:,.0f} - {ci_upper:,.0f} miles")
         # Remaining life
         st.subheader("Remaining Life Estimate")
         col11, col12, col13 = st.columns(3)
@@ -122,10 +140,7 @@ if reg_input.strip():
             "Mean Remaining",
             f"{remaining_mean:,.0f} miles" if remaining_mean > 0 else "N/A"
         )
-        col13.metric(
-            "P75 Remaining",
-            f"{remaining_p75:,.0f} miles" if remaining_p75 > 0 else "N/A"
-        )
+
         
         # Depreciation / cost-of-ownership calculator
         st.subheader("Ownership Cost Calculator")
@@ -149,21 +164,19 @@ if reg_input.strip():
         if remaining_median > 0 and car_price > 0 and annual_mileage > 0:
             years_remaining = remaining_median / annual_mileage
             cost_per_year = car_price / years_remaining
-            cost_per_mile = car_price / remaining_median
 
-            col_d1, col_d2, col_d3 = st.columns(3)
+            col_d1, col_d2 = st.columns(2)
             col_d1.metric("Years Remaining", f"{years_remaining:.1f} years")
             col_d2.metric("Cost Per Year", f"£{cost_per_year:,.0f}")
-            col_d3.metric("Cost Per Mile", f"{cost_per_mile:.2f} p/mile")
         elif remaining_median > 0 and car_price > 0 and annual_mileage == 0:
             st.caption("Enter a non-zero annual mileage to calculate costs.")
         elif remaining_median > 0 and car_price == 0:
             st.caption("Enter a car price above to calculate ownership costs.")
         
         # Visual bar for remaining life vs terminal
-        if remaining_median > 0 and row.get("terminal_median", 0) > 0:
+        if remaining_median > 0 and row.get("terminal_mean", 0) > 0:
             st.subheader("Progress to Terminal Mileage")
-            progress_pct = min(100, (row.get("current_mileage", 0) / row.get("terminal_median", 1)) * 100)
+            progress_pct = min(100, (row.get("current_mileage", 0) / row.get("terminal_mean", 1)) * 100)
             st.progress(progress_pct / 100)
             st.caption(f"{progress_pct:.1f}% of estimated terminal mileage reached")
         
@@ -180,7 +193,7 @@ if reg_input.strip():
         if all_df is not None and not all_df.empty:
             col_s1, col_s2, col_s3 = st.columns(3)
             col_s1.metric("Total Cars in Dataset", f"{len(all_df):,}")
-            col_s2.metric("Average Terminal Median", f"{all_df['terminal_median'].mean():,.0f} miles")
+            col_s2.metric("Average Terminal Mean", f"{all_df['terminal_mean'].mean():,.0f} miles")
             col_s3.metric("Average Current Mileage", f"{all_df['current_mileage'].mean():,.0f} miles")
 
 else:

@@ -102,6 +102,8 @@ for i, batch in enumerate(pf.iter_batches(batch_size=args.batch_size)):
 
     terminal_median = np.median(terminal_median_samples, axis=0)
     terminal_mean   = np.mean(terminal_mean_samples, axis=0)
+    terminal_mean_lower = np.percentile(terminal_mean_samples, 2.5, axis=0)
+    terminal_mean_upper = np.percentile(terminal_mean_samples, 97.5, axis=0)
     terminal_p75    = np.median(terminal_p75_samples, axis=0)  # FIXED: Use median, not percentile
 
     # 4. Build output
@@ -117,6 +119,8 @@ for i, batch in enumerate(pf.iter_batches(batch_size=args.batch_size)):
         "current_mileage":           current_mileage,
         "terminal_median":           terminal_median,
         "terminal_mean":             terminal_mean,
+        "terminal_ci_lower":         terminal_mean_lower,  
+        "terminal_ci_upper":         terminal_mean_upper,
         "terminal_p75":              terminal_p75,
         "remaining_life_median":     terminal_median - current_mileage,
         "remaining_life_mean":       terminal_mean - current_mileage,
