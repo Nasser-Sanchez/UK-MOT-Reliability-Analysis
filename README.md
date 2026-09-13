@@ -85,16 +85,6 @@ The Streamlit app (`app/streamlit_app.py`) provides:
 
 ![UK Car Analyser frontend](docs/example_screenshot.png)
 
-## Docker
-
-The project is fully containerised. Build and run:
-
-```bash
-docker build -t uk-car-analyser .
-docker run -p 8501:8501 uk-car-analyser
-```
-
-The Streamlit server is exposed on port 8501. Open `http://localhost:8501` in your browser.
 
 ## Caveats
 
