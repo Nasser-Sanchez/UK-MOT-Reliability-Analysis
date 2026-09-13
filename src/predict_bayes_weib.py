@@ -113,7 +113,7 @@ for i, batch in enumerate(pf.iter_batches(batch_size=args.batch_size)):
         "engineSize":                chunk["engineSize"],
         "defect_count_advisory":     chunk["defect_count_advisory"],
         "defect_count_dangerous":    chunk["defect_count_dangerous"],
-        "dateFirstUsed":             chunk["dateFirstUsed"],
+        "firstUsedDate":             chunk["firstUsedDate"],
         "current_mileage":           current_mileage,
         "terminal_median":           terminal_median,
         "terminal_mean":             terminal_mean,
