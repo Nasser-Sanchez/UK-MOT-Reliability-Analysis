@@ -217,11 +217,9 @@ docker run -p 8501:8501 uk-car-analyser
 
 ## Planned work
 
-- [ ] Add credible intervals to prediction output
 - [ ] Interactive visualisation dashboard (Plotly)
 - [ ] **Used car listing ranking** -- scrape UK used car listings and rank them by mean/median/P75 remaining miles per pound
 - [ ] **Delta application pipeline** -- apply daily delta files to the combined dataset with a scheduled job (e.g., GitHub Actions or cron)
-- [ ] **Hierarchical pooling** -- add shared hyperpriors for make/model effects to shrink rare combos toward the global mean
 
 ## Tech stack
 
