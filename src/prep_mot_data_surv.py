@@ -69,7 +69,7 @@ con.execute("""
            
         )
     
-        SELECT registration, make, model, CONCAT(make,'_',model) AS make_model, fuelType, engineSize, engineSize_bucket, 
+        SELECT registration, firstUsedDate, make, model, CONCAT(make,'_',model) AS make_model, fuelType, engineSize, engineSize_bucket, 
         defect_count_advisory, defect_count_dangerous,
         years, mileage, event, years_estimate, mileage_estimate, event_interval, p_90_mileage_make
         FROM last_test_prep 
