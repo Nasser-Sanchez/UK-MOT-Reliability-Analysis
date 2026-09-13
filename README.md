@@ -81,6 +81,10 @@ The Streamlit app (`app/streamlit_app.py`) provides:
 - **Ownership cost calculator** -- optional inputs for car price and annual mileage (defaults to 7,000) that compute years remaining, cost per year, and cost per mile based on the predicted remaining life.
 - **Dataset overview** -- aggregate statistics across all vehicles in the prediction dataset.
 
+### Frontend preview
+
+![UK Car Analyser frontend](docs/example_screenshot.png)
+
 ## Docker
 
 The project is fully containerised. Build and run:
