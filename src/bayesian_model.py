@@ -124,7 +124,8 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
         global_stats = stats['global']
         
         prior_mu = global_stats['log_mean']
-        prior_sigma = global_stats['sigma_global_prior'] 
+        prior_sigma = global_stats['log_std']
+        global_prior_sigma = global_stats['sigma_global_prior'] 
 
         # --- UPDATED COORDS: Added make_model_id ---
         with pm.Model(coords={
@@ -140,14 +141,14 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             # ------------------------------------------------------------------
             if state:
                 mu_global = pm.Normal('mu_global', mu=state['global_params']['mu_global'], 
-                                    sigma=state['global_params_std']['mu_global'] / 2,
+                                    sigma=state['global_params_std']['mu_global'] ,
                                     initval=state['global_params']['mu_global'])
                 sigma_global = pm.HalfStudentT('sigma_global', nu=3, sigma=state['global_params']['sigma_global'],
                                              initval=state['global_params']['sigma_global'])
 
             else:
                 mu_global = pm.Normal('mu_global', mu=prior_mu, sigma=prior_sigma, initval=prior_mu)
-                sigma_global = pm.HalfNormal('sigma_global', sigma=prior_sigma, initval=1.0)
+                sigma_global = pm.HalfNormal('sigma_global', sigma=global_prior_sigma, initval=prior_sigma)
                 
             
             # ------------------------------------------------------------------
@@ -155,10 +156,10 @@ def run_streaming_batch(batch_df: pd.DataFrame, state=None):
             # ------------------------------------------------------------------
             if state:
                 mu_make = np.array([state['make_means'].get(cat, 0.0) for cat in make_cats])
-                sig_make = np.array([state['make_means_std'].get(cat, 1.0) for cat in make_cats])
+                sig_make = np.array([state['make_means_std'].get(cat, 0.1) for cat in make_cats])
             else:
                 mu_make = np.zeros(len(make_cats))
-                sig_make = np.full(len(make_cats), 0.25)
+                sig_make = np.full(len(make_cats), 0.1)
             
             make_effect = pm.Normal(
                 'make_effect', 
