@@ -11,7 +11,7 @@ wheels/
 .pixi
 
 # Docs and data
-docs/
+docs/self docs
 data/
 
 # Jupyter checkpoints
