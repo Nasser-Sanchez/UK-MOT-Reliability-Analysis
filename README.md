@@ -55,6 +55,13 @@ The full pipeline generates the following data files (most are gitignored due to
 | `data/mileage_stats.json` | Global and per-make mileage statistics (prior anchors) |
 | `data/model_state.json` | Posterior means/stds from Bayesian model |
 | `data/model_trace_latest.nc` | ArviZ posterior trace (NetCDF) |
+| `data/make_mapping.csv` | Category ID mapping for make |
+| `data/model_mapping.csv` | Category ID mapping for model |
+| `data/fuelType_mapping.csv` | Category ID mapping for fuel type |
+| `data/engineSize_bucket_mapping.csv` | Category ID mapping for engine size bucket |
+| `data/make_model_mapping.csv` | Category ID mapping for make/model combination |
+| `data/prior_predictive_checks/` | Prior predictive check plots (mu_global and terminal mileage distributions) |
+| `data/posterior_predictive_checks/` | Posterior predictive check plots (observed vs predicted mileage for failed vehicles) |
 | `data/terminal_predictions/` | Per-vehicle terminal mileage predictions (600+ parquet files depending on batch size) |
 | `data/processed_registrations.csv` | Registrations already processed by the Bayesian model |
 
