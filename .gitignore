@@ -13,7 +13,7 @@ wheels/
 # Docs and data
 docs/self docs
 data/
-
+!data/terminal_predictions/batch_0000.parquet
 # Jupyter checkpoints
 .ipynb_checkpoints/
 # pixi environments
