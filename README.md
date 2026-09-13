@@ -43,6 +43,8 @@ MOT API (bulk + delta)
 
 ## Data
 
+The full pipeline generates the following data files (most are gitignored due to size):
+
 | Component | Description |
 |---|---|
 | `data/mot_api_bulk/` | Raw bulk download zips from MOT History API |
@@ -53,7 +55,7 @@ MOT API (bulk + delta)
 | `data/mileage_stats.json` | Global and per-make mileage statistics (prior anchors) |
 | `data/model_state.json` | Posterior means/stds from Bayesian model |
 | `data/model_trace_latest.nc` | ArviZ posterior trace (NetCDF) |
-| `data/terminal_predictions/` | Per-vehicle terminal mileage predictions (250+ parquet files) |
+| `data/terminal_predictions/` | Per-vehicle terminal mileage predictions (600+ parquet files depending on batch size) |
 | `data/processed_registrations.csv` | Registrations already processed by the Bayesian model |
 
 ## Model
@@ -85,6 +87,16 @@ The Streamlit app (`app/streamlit_app.py`) provides:
 
 ![UK Car Analyser frontend](docs/example_screenshot.png)
 
+## Docker
+
+A lightweight, frontend-only Docker image is provided for people who want to run the Streamlit app without setting up the full data pipeline. This uses the example prediction data (`batch_0000.parquet`) and does not require API keys or any data processing. See `docs/example_cars.csv` for the example cars.
+
+```bash
+docker build -t uk-car-analyser .
+docker run -p 8501:8501 uk-car-analyser
+```
+
+The Streamlit server is exposed on port 8501. Open `http://localhost:8501` in your browser.
 
 ## Caveats
 
@@ -121,13 +133,16 @@ $env:MOT_TOKEN_URL="https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/to
 
 ## Usage
 
+> The full pipeline requires API credentials, ~53 GB of raw data, and significant compute for the Bayesian model (for running locally).
+
+
 ### 1. Fetch data
 
 ```bash
 # Initial bulk download (53 GB, runs once)
 uv run src/fetch_mot_api_bulk.py
 
-# Daily delta update
+# (TODO) Daily delta update 
 uv run src/fetch_mot_api_delta.py
 ```
 
@@ -148,6 +163,8 @@ uv run src/prep_mot_data_surv.py
 uv run src/normalise_mileage.py
 ```
 
+As of now, only the `global` priors are used from the file generated, and these figures can be adjusted manually to create different priors.
+
 ### 3. Train the Bayesian model
 
 ```bash
@@ -158,7 +175,7 @@ uv run src/run_bayesian_batches.py --batch_size 50000 --num_batches 10
 ### 4. Generate predictions
 
 ```bash
-uv run src/predict_bayes_weib.py --batch-size 10000000
+uv run src/predict_bayes_weib.py --batch-size 100000 --num-batches 10
 ```
 
 ### 5. Run the frontend
